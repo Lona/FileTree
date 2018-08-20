@@ -35,6 +35,7 @@ private extension NSOutlineView {
             addTableColumn(column)
             outlineTableColumn = column
             columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+            backgroundColor = .clear
 
             focusRingType = .none
             rowSizeStyle = .custom
@@ -45,9 +46,12 @@ private extension NSOutlineView {
 
 public class FileTree: NSBox {
 
+    public typealias Path = String
+    public typealias Name = String
+
     // MARK: Lifecycle
 
-    public init(rootPath: String? = nil) {
+    public init(rootPath: Path? = nil) {
         super.init(frame: .zero)
 
         if let rootPath = rootPath {
@@ -74,9 +78,29 @@ public class FileTree: NSBox {
 
     // MARK: Public
 
-    public var sortFiles: ((String, String) -> Bool)? { didSet { update() } }
+    public var onAction: ((Path) -> Void)?
 
-    public var filterFiles: ((String) -> Bool)? { didSet { update() } }
+    public var onSelect: ((Path) -> Void)?
+
+    public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
+
+    public var defaultThumbnailSize: CGFloat = 24.0 { didSet { update() } }
+
+    public var defaultThumbnailMargin: CGFloat = 4.0 { didSet { update() } }
+
+    /** Determine the name to display based on the file's full path. */
+    public var displayNameForFile: ((Path) -> Name)? { didSet { update() } }
+
+    /** Sets the height of the row. If not provided, height is set to `defaultRowHeight`. */
+    public var rowHeightForFile: ((Path) -> CGFloat)? { didSet { update() } }
+
+    public var rowViewForFile: ((Path) -> NSView)? { didSet { update() } }
+
+    public var imageForFile: ((Path, NSSize) -> NSImage)? { didSet { update() } }
+
+    public var sortFiles: ((Name, Name) -> Bool)? { didSet { update() } }
+
+    public var filterFiles: ((Name) -> Bool)? { didSet { update() } }
 
     public var showHiddenFiles = false { didSet { update() } }
 
@@ -120,18 +144,30 @@ public class FileTree: NSBox {
         return children
     }
 
+    @objc func handleAction(_ sender: AnyObject?) {
+        let row = outlineView.selectedRow
+        guard let path = outlineView.item(atRow: row) as? Path else { return }
+        onAction?(path)
+    }
+
+    public func outlineViewSelectionDidChange(_ notification: Notification) {
+        let row = outlineView.selectedRow
+        guard let path = outlineView.item(atRow: row) as? Path else { return }
+        onSelect?(path)
+    }
+
     func setUpViews() {
         boxType = .custom
         borderType = .lineBorder
         contentViewMargins = .zero
         borderWidth = 0
 
-        fillColor = .clear
-
         outlineView.autosaveExpandedItems = true
         outlineView.dataSource = self
         outlineView.delegate = self
         outlineView.autosaveName = autosaveName
+        outlineView.target = self
+        outlineView.action = #selector(handleAction(_:))
 
         outlineView.reloadData()
 
@@ -197,10 +233,6 @@ extension FileTree: NSOutlineViewDataSource {
     }
 }
 
-let rowHeight: CGFloat = 40
-let thumbnailSize: CGFloat = 36
-let thumbnailMargin: CGFloat = 10
-
 private class FileTreeCellView: NSTableCellView {
 
     public var onChangeBackgroundStyle: ((NSView.BackgroundStyle) -> Void)?
@@ -211,21 +243,44 @@ private class FileTreeCellView: NSTableCellView {
 }
 
 extension FileTree: NSOutlineViewDelegate {
-    public func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
-        guard let path = item as? String else { return NSView() }
 
-        let view = FileTreeCellView(frame: NSRect(x: 0, y: 0, width: 200, height: rowHeight))
-        let textView = NSTextField(labelWithString: URL(fileURLWithPath: path).lastPathComponent)
-        textView.frame.origin.y = (rowHeight - textView.intrinsicContentSize.height) / 2
-        textView.frame.origin.x = thumbnailSize + (thumbnailMargin * 2) - 4
+    private func rowHeightForFile(atPath path: String) -> CGFloat {
+        return rowHeightForFile?(path) ?? defaultRowHeight
+    }
+
+    private func imageForFile(atPath path: String, size: NSSize) -> NSImage {
         let image = NSWorkspace.shared.icon(forFile: path)
         image.resizingMode = .stretch
-        image.size = NSSize(width: thumbnailSize, height: thumbnailSize)
-        let imageView = NSImageView(image: image)
+        image.size = NSSize(width: size.width, height: size.height)
+        return image
+    }
+
+    private func rowViewForFile(atPath path: String) -> NSView {
+        let rowHeight = rowHeightForFile(atPath: path)
+        let thumbnailSize = defaultThumbnailSize
+        let thumbnailMargin = defaultThumbnailMargin
+
+        let view = FileTreeCellView()
+
+        let textView = NSTextField(labelWithString: URL(fileURLWithPath: path).lastPathComponent)
+        let imageSize = NSSize(width: thumbnailSize, height: thumbnailSize)
+        let imageView = NSImageView(image: imageForFile?(path, imageSize) ?? imageForFile(atPath: path, size: imageSize))
+
         imageView.frame = NSRect(x: thumbnailMargin, y: (rowHeight - thumbnailSize) / 2, width: thumbnailSize, height: thumbnailSize)
 
         view.addSubview(textView)
         view.addSubview(imageView)
+
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin).isActive = true
+        imageView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize).isActive = true
+        textView.trailingAnchor.constraint(equalTo: view.trailingAnchor).isActive = true
+        textView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+        textView.maximumNumberOfLines = 1
+        textView.lineBreakMode = .byTruncatingMiddle
 
         view.onChangeBackgroundStyle = { style in
             switch style {
@@ -241,8 +296,16 @@ extension FileTree: NSOutlineViewDelegate {
         return view
     }
 
+    public func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        guard let path = item as? String else { return NSView() }
+
+        return rowViewForFile?(path) ?? rowViewForFile(atPath: path)
+    }
+
     public func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
-        return rowHeight
+        guard let path = item as? String else { return defaultRowHeight }
+
+        return rowHeightForFile(atPath: path)
     }
 }
 

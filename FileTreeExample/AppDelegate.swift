@@ -29,6 +29,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.bottomAnchor.constraint(equalTo: fileTree.bottomAnchor).isActive = true
         contentView.leadingAnchor.constraint(equalTo: fileTree.leadingAnchor).isActive = true
         contentView.trailingAnchor.constraint(equalTo: fileTree.trailingAnchor).isActive = true
+
+        fileTree.onAction = { path in
+            Swift.print("Click \(path)")
+        }
+
+        fileTree.onSelect = { path in
+            Swift.print("Selected \(path)")
+        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
