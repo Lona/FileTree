@@ -7,13 +7,14 @@
 //
 
 import Cocoa
+import FileTree
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     @IBOutlet weak var window: NSWindow!
 
-    var fileTree = FileTree(rootPath: "/Users/devinabbott/Projects/Lona/studio/LonaStudio/Generated")
+    var fileTree = FileTree(rootPath: "/Users/devinabbott/Projects/FileTree")
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application

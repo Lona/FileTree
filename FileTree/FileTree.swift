@@ -1,6 +1,6 @@
 //
 //  FileTree.swift
-//  LonaStudio
+//  FileTree
 //
 //  Created by Devin Abbott on 8/17/18.
 //  Copyright © 2018 Devin Abbott. All rights reserved.
@@ -39,8 +39,6 @@ private extension NSOutlineView {
             focusRingType = .none
             rowSizeStyle = .custom
             headerView = nil
-
-            // registerForDraggedTypes([NSPasteboard.PasteboardType(rawValue: "component.element")])
         }
     }
 }
