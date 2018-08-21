@@ -8,6 +8,7 @@
 
 import AppKit
 import Foundation
+import Witness
 
 private extension NSTableColumn {
     convenience init(title: String, resizingMask: ResizingOptions = .autoresizingMask) {
@@ -31,11 +32,13 @@ private extension NSOutlineView {
             return
         case .singleColumn:
             let column = NSTableColumn(title: "OutlineColumn")
+            column.minWidth = 100
 
             addTableColumn(column)
             outlineTableColumn = column
             columnAutoresizingStyle = .uniformColumnAutoresizingStyle
             backgroundColor = .clear
+            autoresizesOutlineColumn = true
 
             focusRingType = .none
             rowSizeStyle = .custom
@@ -73,6 +76,8 @@ public class FileTree: NSBox {
 
         update()
 
+        setUpWitness()
+
         initialized = true
     }
 
@@ -81,6 +86,10 @@ public class FileTree: NSBox {
     public var onAction: ((Path) -> Void)?
 
     public var onSelect: ((Path) -> Void)?
+
+    public var onCreateFile: ((Path) -> Void)?
+
+    public var onDeleteFile: ((Path) -> Void)?
 
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
@@ -110,11 +119,15 @@ public class FileTree: NSBox {
 
             outlineView.autosaveName = autosaveName
 
+            setUpWitness()
+
             update()
         }
     }
 
     // MARK: Private
+
+    private var witness: Witness?
 
     private var initialized = false
     private var outlineView = NSOutlineView(style: .singleColumn)
@@ -176,6 +189,8 @@ public class FileTree: NSBox {
         scrollView.addSubview(outlineView)
         scrollView.documentView = outlineView
 
+        outlineView.sizeToFit()
+
         addSubview(scrollView)
 
     }
@@ -192,6 +207,81 @@ public class FileTree: NSBox {
 
     func update() {
         outlineView.reloadData()
+    }
+}
+
+extension FileTree {
+    private func setUpWitness() {
+//        Swift.print("Watching events at", rootPath)
+
+        self.witness = Witness(paths: [rootPath], flags: .FileEvents, latency: 0) { events in
+//            print("file system events received: \(events)")
+            DispatchQueue.main.async {
+                events.forEach { event in
+                    if event.flags.contains(.ItemCreated) {
+//                        Swift.print("Create event", event)
+                        self.createFile(atPath: event.path)
+                    } else if event.flags.contains(.ItemRemoved) {
+//                        Swift.print("Delete event", event)
+                        self.deleteFile(atPath: event.path)
+                    }
+                }
+            }
+        }
+    }
+
+    private func deleteFile(atPath path: Path) {
+        onDeleteFile?(path)
+
+        let url = URL(fileURLWithPath: path)
+
+//        Swift.print("Delete file", url.lastPathComponent)
+
+        guard let parent = outlineView.parent(forItem: path) else { return }
+
+        outlineView.reloadItem(parent, reloadChildren: true)
+        outlineView.sizeToFit()
+
+    }
+
+    private func createFile(atPath path: Path) {
+        onCreateFile?(path)
+
+        let url = URL(fileURLWithPath: path)
+
+//        Swift.print("Create file", url.lastPathComponent)
+
+        let parentUrl = url.deletingLastPathComponent()
+        let parentPath = parentUrl.path
+
+//        Swift.print("Try to find \(parentPath)")
+
+        guard let parent = first(where: { ($0 as? String) == parentPath }) else { return }
+
+        outlineView.reloadItem(parent, reloadChildren: true)
+        outlineView.sizeToFit()
+    }
+
+    private func first(where: (Any) -> Bool) -> Any? {
+        func firstChild(_ item: Any, where: (Any) -> Bool) -> Any? {
+            if `where`(item) { return item }
+
+            let childCount = outlineView.numberOfChildren(ofItem: item)
+
+            for i in 0..<childCount {
+                if
+                    let child = outlineView.child(i, ofItem: item),
+                    let found = firstChild(child, where: `where`) {
+                    return found
+                }
+            }
+
+            return nil
+        }
+
+        guard let root = outlineView.child(0, ofItem: nil) else { return nil }
+
+        return firstChild(root, where: `where`)
     }
 }
 

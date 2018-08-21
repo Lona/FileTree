@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		6B23DBDA212B1CAC00614C77 /* FileTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B23DBD7212B1C3C00614C77 /* FileTree.framework */; };
 		6B23DBDB212B1CAC00614C77 /* FileTree.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6B23DBD7212B1C3C00614C77 /* FileTree.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		6BBE0F76212B50D500CEE8C1 /* Witness.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 6BBE0F75212B50D500CEE8C1 /* Witness.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		6BD3429921278D5800CB54A4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD3429821278D5800CB54A4 /* AppDelegate.swift */; };
 		6BD3429B21278D5900CB54A4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6BD3429A21278D5900CB54A4 /* Assets.xcassets */; };
 		6BD3429E21278D5900CB54A4 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 6BD3429C21278D5900CB54A4 /* MainMenu.xib */; };
@@ -43,10 +44,21 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6BBE0F74212B50CE00CEE8C1 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				6BBE0F76212B50D500CEE8C1 /* Witness.framework in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		6B23DBD2212B1C3C00614C77 /* FileTree.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FileTree.xcodeproj; sourceTree = "<group>"; };
+		6BBE0F75212B50D500CEE8C1 /* Witness.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Witness.framework; path = Carthage/Build/Mac/Witness.framework; sourceTree = "<group>"; };
 		6BD3429521278D5800CB54A4 /* FileTreeExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FileTreeExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6BD3429821278D5800CB54A4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		6BD3429A21278D5900CB54A4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -78,6 +90,7 @@
 		6BD3428C21278D5800CB54A4 = {
 			isa = PBXGroup;
 			children = (
+				6BBE0F75212B50D500CEE8C1 /* Witness.framework */,
 				6B23DBD2212B1C3C00614C77 /* FileTree.xcodeproj */,
 				6BD3429721278D5800CB54A4 /* FileTreeExample */,
 				6BD3429621278D5800CB54A4 /* Products */,
@@ -111,9 +124,10 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 6BD342A321278D5900CB54A4 /* Build configuration list for PBXNativeTarget "FileTreeExample" */;
 			buildPhases = (
-				6BD3429121278D5800CB54A4 /* Sources */,
 				6BD3429221278D5800CB54A4 /* Frameworks */,
 				6BD3429321278D5800CB54A4 /* Resources */,
+				6BD3429121278D5800CB54A4 /* Sources */,
+				6BBE0F74212B50CE00CEE8C1 /* CopyFiles */,
 				6B23DBDE212B1CAC00614C77 /* Embed Frameworks */,
 			);
 			buildRules = (
