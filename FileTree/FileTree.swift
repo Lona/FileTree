@@ -97,6 +97,8 @@ public class FileTree: NSBox {
 
     public var defaultThumbnailMargin: CGFloat = 4.0 { didSet { update() } }
 
+    public var defaultFont: NSFont = NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .regular))
+
     /** Determine the name to display based on the file's full path. */
     public var displayNameForFile: ((Path) -> Name)? { didSet { update() } }
 
@@ -233,7 +235,7 @@ extension FileTree {
     private func deleteFile(atPath path: Path) {
         onDeleteFile?(path)
 
-        let url = URL(fileURLWithPath: path)
+//        let url = URL(fileURLWithPath: path)
 
 //        Swift.print("Delete file", url.lastPathComponent)
 
@@ -349,10 +351,11 @@ extension FileTree: NSOutlineViewDelegate {
         let rowHeight = rowHeightForFile(atPath: path)
         let thumbnailSize = defaultThumbnailSize
         let thumbnailMargin = defaultThumbnailMargin
+        let name = displayNameForFile?(path) ?? URL(fileURLWithPath: path).lastPathComponent
 
         let view = FileTreeCellView()
 
-        let textView = NSTextField(labelWithString: URL(fileURLWithPath: path).lastPathComponent)
+        let textView = NSTextField(labelWithString: name)
         let imageSize = NSSize(width: thumbnailSize, height: thumbnailSize)
         let imageView = NSImageView(image: imageForFile?(path, imageSize) ?? imageForFile(atPath: path, size: imageSize))
 
@@ -369,6 +372,7 @@ extension FileTree: NSOutlineViewDelegate {
         textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize).isActive = true
         textView.trailingAnchor.constraint(equalTo: view.trailingAnchor).isActive = true
         textView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+        textView.font = defaultFont
         textView.maximumNumberOfLines = 1
         textView.lineBreakMode = .byTruncatingMiddle
 
