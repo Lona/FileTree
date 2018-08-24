@@ -342,7 +342,6 @@ extension FileTree: NSOutlineViewDelegate {
 
     private func imageForFile(atPath path: String, size: NSSize) -> NSImage {
         let image = NSWorkspace.shared.icon(forFile: path)
-        image.resizingMode = .stretch
         image.size = NSSize(width: size.width, height: size.height)
         return image
     }
@@ -358,7 +357,7 @@ extension FileTree: NSOutlineViewDelegate {
         let textView = NSTextField(labelWithString: name)
         let imageSize = NSSize(width: thumbnailSize, height: thumbnailSize)
         let imageView = NSImageView(image: imageForFile?(path, imageSize) ?? imageForFile(atPath: path, size: imageSize))
-
+        imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.frame = NSRect(x: thumbnailMargin, y: (rowHeight - thumbnailSize) / 2, width: thumbnailSize, height: thumbnailSize)
 
         view.addSubview(textView)
