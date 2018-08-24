@@ -93,7 +93,7 @@ public class FileTree: NSBox {
 
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
-    public var defaultThumbnailSize: CGFloat = 24.0 { didSet { update() } }
+    public var defaultThumbnailSize = NSSize(width: 24, height: 24) { didSet { update() } }
 
     public var defaultThumbnailMargin: CGFloat = 4.0 { didSet { update() } }
 
@@ -341,13 +341,10 @@ extension FileTree: NSOutlineViewDelegate {
     }
 
     private func imageForFile(atPath path: String, size: NSSize) -> NSImage {
-        let image = NSWorkspace.shared.icon(forFile: path)
-        image.size = NSSize(width: size.width, height: size.height)
-        return image
+        return NSWorkspace.shared.icon(forFile: path)
     }
 
     private func rowViewForFile(atPath path: String) -> NSView {
-        let rowHeight = rowHeightForFile(atPath: path)
         let thumbnailSize = defaultThumbnailSize
         let thumbnailMargin = defaultThumbnailMargin
         let name = displayNameForFile?(path) ?? URL(fileURLWithPath: path).lastPathComponent
@@ -355,10 +352,8 @@ extension FileTree: NSOutlineViewDelegate {
         let view = FileTreeCellView()
 
         let textView = NSTextField(labelWithString: name)
-        let imageSize = NSSize(width: thumbnailSize, height: thumbnailSize)
-        let imageView = NSImageView(image: imageForFile?(path, imageSize) ?? imageForFile(atPath: path, size: imageSize))
+        let imageView = NSImageView(image: imageForFile?(path, thumbnailSize) ?? imageForFile(atPath: path, size: thumbnailSize))
         imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.frame = NSRect(x: thumbnailMargin, y: (rowHeight - thumbnailSize) / 2, width: thumbnailSize, height: thumbnailSize)
 
         view.addSubview(textView)
         view.addSubview(imageView)
@@ -366,9 +361,11 @@ extension FileTree: NSOutlineViewDelegate {
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin).isActive = true
         imageView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+        imageView.widthAnchor.constraint(equalToConstant: thumbnailSize.width).isActive = true
+        imageView.heightAnchor.constraint(equalToConstant: thumbnailSize.height).isActive = true
 
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize).isActive = true
+        textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize.width).isActive = true
         textView.trailingAnchor.constraint(equalTo: view.trailingAnchor).isActive = true
         textView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
         textView.font = defaultFont
