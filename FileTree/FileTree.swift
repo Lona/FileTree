@@ -127,6 +127,10 @@ public class FileTree: NSBox {
         }
     }
 
+    public func reloadData() {
+        update()
+    }
+
     // MARK: Private
 
     private var witness: Witness?
