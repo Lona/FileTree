@@ -115,6 +115,8 @@ public class FileTree: NSBox {
 
     public var showHiddenFiles = false { didSet { update() } }
 
+    public var showRootFile = true { didSet { update() } }
+
     public var rootPath = "/" {
         didSet {
             if !initialized { return }
@@ -294,13 +296,25 @@ extension FileTree {
 extension FileTree: NSOutlineViewDataSource {
 
     public func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        if item == nil { return 1 }
+        if item == nil {
+            if showRootFile {
+                return 1
+            } else {
+                return contentsOfDirectory(atPath: rootPath).count
+            }
+        }
         guard let path = item as? String else { return 0 }
         return contentsOfDirectory(atPath: path).count
     }
 
     public func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
-        if item == nil { return rootPath }
+        if item == nil {
+            if showRootFile {
+                return rootPath
+            } else {
+                return rootPath + "/" + contentsOfDirectory(atPath: rootPath)[index]
+            }
+        }
         let path = item as! String
         return path + "/" + contentsOfDirectory(atPath: path)[index]
     }
