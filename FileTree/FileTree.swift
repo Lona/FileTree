@@ -312,17 +312,17 @@ extension FileTree {
                 events.forEach { event in
                     if event.flags.contains(.ItemCreated) {
 //                        Swift.print("Create event", event)
-                        self.createFile(atPath: event.path)
+                        self.handleCreateFileEvent(atPath: event.path)
                     } else if event.flags.contains(.ItemRemoved) {
 //                        Swift.print("Delete event", event)
-                        self.deleteFile(atPath: event.path)
+                        self.handleDeleteFileEvent(atPath: event.path)
                     }
                 }
             }
         }
     }
 
-    private func deleteFile(atPath path: Path) {
+    private func handleDeleteFileEvent(atPath path: Path) {
         let url = URL(fileURLWithPath: path)
 
         if !shouldDisplay(fileName: url.lastPathComponent) { return }
@@ -336,7 +336,7 @@ extension FileTree {
 
     }
 
-    private func createFile(atPath path: Path) {
+    private func handleCreateFileEvent(atPath path: Path) {
         let url = URL(fileURLWithPath: path)
 
         if !shouldDisplay(fileName: url.lastPathComponent) { return }
