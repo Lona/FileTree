@@ -91,6 +91,8 @@ public class FileTree: NSBox {
 
     public var onDeleteFile: ((Path) -> Void)?
 
+    public var onRenameFile: ((Path, Path) -> Void)?
+
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
     public var defaultThumbnailSize = NSSize(width: 24, height: 24) { didSet { update() } }
@@ -105,7 +107,7 @@ public class FileTree: NSBox {
     /** Sets the height of the row. If not provided, height is set to `defaultRowHeight`. */
     public var rowHeightForFile: ((Path) -> CGFloat)? { didSet { update() } }
 
-    public var rowViewForFile: ((Path) -> NSView)? { didSet { update() } }
+    public var rowViewForFile: ((Path, RowViewOptions) -> NSView)? { didSet { update() } }
 
     public var imageForFile: ((Path, NSSize) -> NSImage)? { didSet { update() } }
 
@@ -134,6 +136,39 @@ public class FileTree: NSBox {
     public func reloadData() {
         update()
     }
+
+    @discardableResult public func beginRenamingFile(atPath path: Path) -> NSView? {
+        renamingPath = path
+
+        let index = outlineView.row(forItem: path)
+        outlineView.scrollRowToVisible(index)
+        outlineView.reloadItem(path)
+
+        guard let cellView = outlineView.view(atColumn: 0, row: index, makeIfNecessary: false) else { return nil }
+
+        // If we're using the default rows, begin the renaming session
+        if let cellView = cellView as? FileTreeCellView {
+            cellView.onBeginRenaming?()
+        }
+
+        // The caller will use this to initiate editing
+        return cellView
+    }
+
+    public func endRenamingFile() {
+        guard let path = renamingPath else { return }
+
+        renamingPath = nil
+
+        guard let parent = outlineView.parent(forItem: path) else { return }
+
+        outlineView.reloadItem(parent, reloadChildren: true)
+        outlineView.sizeToFit()
+    }
+
+    private var renamingPath: String?
+
+    private var contextMenuForPath: String?
 
     // MARK: Private
 
@@ -171,8 +206,6 @@ public class FileTree: NSBox {
             children = children.sorted()
         }
 
-        directoryContentsCache[path] = children
-
         return children
     }
 
@@ -202,7 +235,20 @@ public class FileTree: NSBox {
         let point = outlineView.convert(event.locationInWindow, from: nil)
         let row = outlineView.row(at: point)
         guard let path = outlineView.item(atRow: row) as? Path else { return nil }
-        return menuForFile?(path)
+
+        if let menu = menuForFile?(path) {
+            menu.delegate = self
+
+            contextMenuForPath = path
+
+            if let rowView = outlineView.rowView(atRow: row, makeIfNecessary: false) as? FileTreeRowView {
+                rowView.drawsContextMenuOutline = true
+            }
+
+            return menu
+        }
+
+        return nil
     }
 
     func setUpViews() {
@@ -328,11 +374,17 @@ extension FileTree: NSOutlineViewDataSource {
             if showRootFile {
                 return 1
             } else {
-                return contentsOfDirectory(atPath: rootPath).count
+                let contents = contentsOfDirectory(atPath: rootPath)
+                directoryContentsCache[rootPath] = contents
+                return contents.count
             }
         }
+
         guard let path = item as? String else { return 0 }
-        return contentsOfDirectory(atPath: path).count
+
+        let contents = contentsOfDirectory(atPath: path)
+        directoryContentsCache[path] = contents
+        return contents.count
     }
 
     public func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
@@ -371,9 +423,40 @@ extension FileTree: NSOutlineViewDataSource {
     }
 }
 
+private class FileTreeRowView: NSTableRowView {
+    public var drawsContextMenuOutline = false {
+        didSet {
+            if drawsContextMenuOutline != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        if drawsContextMenuOutline {
+            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 3, yRadius: 3)
+            path.lineWidth = 2
+            if #available(OSX 10.14, *) {
+                NSColor.controlAccentColor.set()
+            } else {
+                NSColor.selectedControlColor.set()
+            }
+            path.stroke()
+        }
+    }
+}
+
 private class FileTreeCellView: NSTableCellView {
 
+    fileprivate var displayName: String?
+
     public var onChangeBackgroundStyle: ((NSView.BackgroundStyle) -> Void)?
+
+    public var onBeginRenaming: (() -> Void)?
+
+    public var onEndRenaming: ((FileTree.Path) -> Void)?
 
     override var backgroundStyle: NSView.BackgroundStyle {
         didSet { onChangeBackgroundStyle?(backgroundStyle) }
@@ -381,6 +464,19 @@ private class FileTreeCellView: NSTableCellView {
 }
 
 extension FileTree: NSOutlineViewDelegate {
+
+    public struct RowViewOptions: OptionSet {
+        public init(rawValue: Int) {
+            self.rawValue = rawValue
+        }
+
+        public let rawValue: Int
+
+        public static let editable = RowViewOptions(rawValue: 1 << 0)
+        public static let hasActiveContextMenu = RowViewOptions(rawValue: 1 << 1)
+
+        public static let none: RowViewOptions = []
+    }
 
     private func rowHeightForFile(atPath path: String) -> CGFloat {
         return rowHeightForFile?(path) ?? defaultRowHeight
@@ -390,14 +486,21 @@ extension FileTree: NSOutlineViewDelegate {
         return NSWorkspace.shared.icon(forFile: path)
     }
 
-    private func rowViewForFile(atPath path: String) -> NSView {
+    private func rowViewForFile(atPath path: String, options: RowViewOptions) -> NSView {
         let thumbnailSize = defaultThumbnailSize
         let thumbnailMargin = defaultThumbnailMargin
         let name = displayNameForFile?(path) ?? URL(fileURLWithPath: path).lastPathComponent
 
         let view = FileTreeCellView()
+        view.displayName = name
 
         let textView = NSTextField(labelWithString: name)
+
+        if options.contains(.editable) {
+            textView.isEditable = true
+            textView.isEnabled = true
+        }
+
         let imageView = NSImageView(image: imageForFile?(path, thumbnailSize) ?? imageForFile(atPath: path, size: thumbnailSize))
         imageView.imageScaling = .scaleProportionallyUpOrDown
 
@@ -412,7 +515,7 @@ extension FileTree: NSOutlineViewDelegate {
 
         textView.translatesAutoresizingMaskIntoConstraints = false
         textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize.width).isActive = true
-        textView.trailingAnchor.constraint(equalTo: view.trailingAnchor).isActive = true
+        textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4).isActive = true
         textView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
         textView.font = defaultFont
         textView.maximumNumberOfLines = 1
@@ -429,13 +532,62 @@ extension FileTree: NSOutlineViewDelegate {
             }
         }
 
+        view.onBeginRenaming = { [unowned self] in
+            textView.delegate = self
+            NSApp.activate(ignoringOtherApps: true)
+            self.window?.makeFirstResponder(textView)
+        }
+
+        view.onEndRenaming = { [unowned self] newName in
+            textView.delegate = nil
+
+            if newName != name {
+                let newPath = URL(fileURLWithPath: path)
+                    .deletingLastPathComponent()
+                    .appendingPathComponent(newName)
+                    .path
+                do {
+                    try FileManager.default.moveItem(atPath: path, toPath: newPath)
+                } catch {
+                    Swift.print("Failed to rename \(path) to \(newPath)")
+                }
+                self.onRenameFile?(path, newPath)
+            }
+        }
+
         return view
+    }
+
+    private func rowViewOptions(atPath path: Path) -> RowViewOptions {
+        var options: RowViewOptions = []
+
+        if renamingPath == path {
+            options.insert(.editable)
+        }
+
+        if contextMenuForPath == path {
+            options.insert(.hasActiveContextMenu)
+        }
+
+        return options
+    }
+
+    public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        let rowView = FileTreeRowView()
+
+        guard let path = item as? String else { return rowView }
+
+        rowView.drawsContextMenuOutline = contextMenuForPath == path
+
+        return rowView
     }
 
     public func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
         guard let path = item as? String else { return NSView() }
 
-        return rowViewForFile?(path) ?? rowViewForFile(atPath: path)
+        let options = rowViewOptions(atPath: path)
+
+        return rowViewForFile?(path, options) ?? rowViewForFile(atPath: path, options: options)
     }
 
     public func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
@@ -445,3 +597,31 @@ extension FileTree: NSOutlineViewDelegate {
     }
 }
 
+extension FileTree: NSTextFieldDelegate {
+    public func controlTextDidEndEditing(_ obj: Notification) {
+//        print("Control text did end editing")
+
+        guard let textView = obj.object as? NSTextField else { return }
+
+        // If we're using the default rows, end the renaming session
+        if let cellView = textView.superview as? FileTreeCellView {
+            cellView.onEndRenaming?(textView.stringValue)
+        }
+
+        endRenamingFile()
+    }
+}
+
+extension FileTree: NSMenuDelegate {
+    public func menuDidClose(_ menu: NSMenu) {
+        if let contextMenuForPath = self.contextMenuForPath {
+            self.contextMenuForPath = nil
+
+            let row = outlineView.row(forItem: contextMenuForPath)
+
+            if let rowView = outlineView.rowView(atRow: row, makeIfNecessary: false) as? FileTreeRowView {
+                rowView.drawsContextMenuOutline = false
+            }
+        }
+    }
+}

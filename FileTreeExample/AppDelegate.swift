@@ -9,6 +9,15 @@
 import Cocoa
 import FileTree
 
+private func isDirectory(path: FileTree.Path) -> Bool {
+    var isDir: ObjCBool = false
+    if FileManager.default.fileExists(atPath: path, isDirectory: &isDir) {
+        return isDir.boolValue
+    } else {
+        return false
+    }
+}
+
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -38,15 +47,125 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Swift.print("Selected \(path)")
         }
 
-        fileTree.menuForFile = { path in
-            Swift.print("Menu for \(path)")
+        fileTree.onRenameFile = { oldPath, newPath in
+            Swift.print("Renamed \(oldPath) to \(newPath)")
+        }
 
+        fileTree.onCreateFile = { path in
+            Swift.print("Create file \(path)")
+        }
+
+        fileTree.menuForFile = { [unowned self] path in
             let menu = NSMenu(title: "Menu")
 
-            menu.addItem(withTitle: "Item 1", action: #selector(self.handleMenuItem), keyEquivalent: "")
-            menu.addItem(withTitle: "Item 2", action: #selector(self.handleMenuItem), keyEquivalent: "")
+            menu.addItem(withTitle: "Reveal in Finder", action: #selector(self.handleRevealInFinder), keyEquivalent: "")
+            menu.addItem(NSMenuItem.separator())
+
+            if isDirectory(path: path) {
+                menu.addItem(withTitle: "New File", action: #selector(self.handleNewFile), keyEquivalent: "")
+                menu.addItem(withTitle: "New Directory", action: #selector(self.handleNewDirectory), keyEquivalent: "")
+                menu.addItem(NSMenuItem.separator())
+            }
+
+            if path != self.fileTree.rootPath {
+                menu.addItem(withTitle: "Rename", action: #selector(self.handleRenameFile), keyEquivalent: "")
+                menu.addItem(withTitle: "Delete", action: #selector(self.handleDeleteFile), keyEquivalent: "")
+            }
+
+            menu.items.forEach { item in item.representedObject = path }
 
             return menu
+        }
+    }
+
+    @objc func handleRevealInFinder(_ sender: AnyObject) {
+        guard let sender = sender as? NSMenuItem,
+            let path = sender.representedObject as? FileTree.Path else { return }
+
+        let parentPath = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: parentPath)
+    }
+
+    func promptForName(messageText: String, placeholderText: String) -> String? {
+        let alert = NSAlert()
+        alert.messageText = messageText
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Cancel")
+        let textView = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 20))
+        textView.stringValue = ""
+        textView.placeholderString = placeholderText
+        alert.accessoryView = textView
+        alert.window.initialFirstResponder = textView
+
+        alert.layout()
+
+        let response = alert.runModal()
+
+        if response == NSApplication.ModalResponse.alertFirstButtonReturn {
+            return textView.stringValue
+        } else {
+            return nil
+        }
+    }
+
+    @objc func handleNewFile(_ sender: AnyObject) {
+        guard let sender = sender as? NSMenuItem, let path = sender.representedObject as? FileTree.Path else { return }
+
+        guard let newFileName = promptForName(
+            messageText: "Enter a new file name",
+            placeholderText: "File name") else { return }
+
+        let newFilePath =  path + "/" + newFileName
+
+        Swift.print("New file \(newFilePath)")
+
+        FileManager.default.createFile(atPath: newFilePath, contents: Data(), attributes: nil)
+    }
+
+    @objc func handleNewDirectory(_ sender: AnyObject) {
+        guard let sender = sender as? NSMenuItem, let path = sender.representedObject as? FileTree.Path else { return }
+
+        guard let newFileName = promptForName(
+            messageText: "Enter a new directory name",
+            placeholderText: "Directory name") else { return }
+
+        let newFilePath =  path + "/" + newFileName
+
+        Swift.print("New directory \(newFilePath)")
+
+        do {
+            try FileManager.default.createDirectory(
+                atPath: newFilePath,
+                withIntermediateDirectories: true,
+                attributes: nil)
+        } catch {
+            Swift.print("Failed to create directory \(newFileName)")
+        }
+
+    }
+
+    @objc func handleRenameFile(_ sender: AnyObject) {
+        guard let sender = sender as? NSMenuItem, let path = sender.representedObject as? FileTree.Path else { return }
+
+        fileTree.beginRenamingFile(atPath: path)
+    }
+
+    @objc func handleDeleteFile(_ sender: AnyObject) {
+        guard let sender = sender as? NSMenuItem, let path = sender.representedObject as? FileTree.Path else { return }
+
+        let alert = NSAlert()
+        alert.messageText = "Are you sure you want to delete \(path)?"
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+
+        let response = alert.runModal()
+
+        if response == NSApplication.ModalResponse.alertFirstButtonReturn {
+            do {
+                try FileManager.default.removeItem(atPath: path)
+            } catch {
+                Swift.print("Failed to delete \(path)")
+            }
         }
     }
 
