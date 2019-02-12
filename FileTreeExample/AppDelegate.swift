@@ -37,6 +37,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         fileTree.onSelect = { path in
             Swift.print("Selected \(path)")
         }
+
+        fileTree.menuForFile = { path in
+            Swift.print("Menu for \(path)")
+
+            let menu = NSMenu(title: "Menu")
+
+            menu.addItem(withTitle: "Item 1", action: #selector(self.handleMenuItem), keyEquivalent: "")
+            menu.addItem(withTitle: "Item 2", action: #selector(self.handleMenuItem), keyEquivalent: "")
+
+            return menu
+        }
+    }
+
+    @objc func handleMenuItem() {
+        Swift.print("Handle menu item")
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

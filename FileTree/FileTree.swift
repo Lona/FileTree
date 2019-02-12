@@ -109,6 +109,8 @@ public class FileTree: NSBox {
 
     public var imageForFile: ((Path, NSSize) -> NSImage)? { didSet { update() } }
 
+    public var menuForFile: ((Path) -> NSMenu?)?
+
     public var sortFiles: ((Name, Name) -> Bool)? { didSet { update() } }
 
     public var filterFiles: ((Name) -> Bool)? { didSet { update() } }
@@ -175,6 +177,13 @@ public class FileTree: NSBox {
         let row = outlineView.selectedRow
         guard let path = outlineView.item(atRow: row) as? Path else { return }
         onSelect?(path)
+    }
+
+    public override func menu(for event: NSEvent) -> NSMenu? {
+        let point = outlineView.convert(event.locationInWindow, from: nil)
+        let row = outlineView.row(at: point)
+        guard let path = outlineView.item(atRow: row) as? Path else { return nil }
+        return menuForFile?(path)
     }
 
     func setUpViews() {
