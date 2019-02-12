@@ -139,6 +139,13 @@ public class FileTree: NSBox {
 
     private var witness: Witness?
 
+    // We keep a cache of directory contents to prevent race condition bugs.
+    //
+    // If the number of files in a directory changes between the call to numberOfChildren
+    // and the call to childOfItem, we can end up in an invalid state. We cache the contents
+    // of the directory in the call to numberOfChildren to ensure it's the same in childOfItem.
+    private var directoryContentsCache: [String: [String]] = [:]
+
     private var initialized = false
     private var outlineView = NSOutlineView(style: .singleColumn)
     private var scrollView = NSScrollView(frame: .zero)
@@ -164,7 +171,19 @@ public class FileTree: NSBox {
             children = children.sorted()
         }
 
+        directoryContentsCache[path] = children
+
         return children
+    }
+
+    private func cachedContentsOfDirectory(atPath path: String, index: Int) -> String {
+        let contents = directoryContentsCache[path] ?? contentsOfDirectory(atPath: path)
+
+        if contents.count > index {
+            return contents[index]
+        } else {
+            return ""
+        }
     }
 
     @objc func handleAction(_ sender: AnyObject?) {
@@ -321,11 +340,11 @@ extension FileTree: NSOutlineViewDataSource {
             if showRootFile {
                 return rootPath
             } else {
-                return rootPath + "/" + contentsOfDirectory(atPath: rootPath)[index]
+                return rootPath + "/" + cachedContentsOfDirectory(atPath: rootPath, index: index)
             }
         }
         let path = item as! String
-        return path + "/" + contentsOfDirectory(atPath: path)[index]
+        return path + "/" + cachedContentsOfDirectory(atPath: path, index: index)
     }
 
     public func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
