@@ -120,6 +120,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Swift.print("New file \(newFilePath)")
 
         FileManager.default.createFile(atPath: newFilePath, contents: Data(), attributes: nil)
+
+        fileTree.reloadData()
     }
 
     @objc func handleNewDirectory(_ sender: AnyObject) {

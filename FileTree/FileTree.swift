@@ -189,16 +189,20 @@ public class FileTree: NSBox {
         return NSTableView.AutosaveName(rootPath)
     }
 
-    private func contentsOfDirectory(atPath path: String) -> [String] {
-        var children = (try? FileManager.default.contentsOfDirectory(atPath: path)) ?? []
-
+    private func shouldDisplay(fileName: String) -> Bool {
         if let filterFiles = filterFiles {
-            children = children.filter(filterFiles)
-        } else if !showHiddenFiles {
-            children = children.filter { name in
-                return !name.starts(with: ".")
-            }
+            return filterFiles(fileName)
         }
+
+        if !showHiddenFiles {
+            return !fileName.starts(with: ".")
+        }
+
+        return true
+    }
+
+    private func filteredAndSorted(fileNames: [String]) -> [String] {
+        var children = fileNames.filter(shouldDisplay)
 
         if let sortComparator = sortFiles {
             children = children.sorted(by: sortComparator)
@@ -207,6 +211,12 @@ public class FileTree: NSBox {
         }
 
         return children
+    }
+
+    private func contentsOfDirectory(atPath path: String) -> [String] {
+        let children = (try? FileManager.default.contentsOfDirectory(atPath: path)) ?? []
+
+        return filteredAndSorted(fileNames: children)
     }
 
     private func cachedContentsOfDirectory(atPath path: String, index: Int) -> String {
@@ -313,11 +323,11 @@ extension FileTree {
     }
 
     private func deleteFile(atPath path: Path) {
+        let url = URL(fileURLWithPath: path)
+
+        if !shouldDisplay(fileName: url.lastPathComponent) { return }
+
         onDeleteFile?(path)
-
-//        let url = URL(fileURLWithPath: path)
-
-//        Swift.print("Delete file", url.lastPathComponent)
 
         guard let parent = outlineView.parent(forItem: path) else { return }
 
@@ -327,16 +337,14 @@ extension FileTree {
     }
 
     private func createFile(atPath path: Path) {
-        onCreateFile?(path)
-
         let url = URL(fileURLWithPath: path)
 
-//        Swift.print("Create file", url.lastPathComponent)
+        if !shouldDisplay(fileName: url.lastPathComponent) { return }
+
+        onCreateFile?(path)
 
         let parentUrl = url.deletingLastPathComponent()
         let parentPath = parentUrl.path
-
-//        Swift.print("Try to find \(parentPath)")
 
         guard let parent = first(where: { ($0 as? String) == parentPath }) else { return }
 
