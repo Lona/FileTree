@@ -402,9 +402,9 @@ extension FileTree: NSOutlineViewDelegate {
         view.onChangeBackgroundStyle = { style in
             switch style {
             case .light:
-                textView.textColor = .black
+                textView.textColor = NSColor.controlTextColor
             case .dark:
-                textView.textColor = .white
+                textView.textColor = NSColor.selectedControlTextColor
             default:
                 break
             }
