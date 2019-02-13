@@ -55,6 +55,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Swift.print("Create file \(path)")
         }
 
+        fileTree.onDeleteFile = { path in
+            Swift.print("Delete file \(path)")
+        }
+
         fileTree.menuForFile = { [unowned self] path in
             let menu = NSMenu(title: "Menu")
 
@@ -153,7 +157,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func handleRenameFile(_ sender: AnyObject) {
         guard let sender = sender as? NSMenuItem, let path = sender.representedObject as? FileTree.Path else { return }
 
-        fileTree.beginRenamingFile(atPath: path)
+        if let cellView = fileTree.beginRenamingFile(atPath: path) as? FileTree.DefaultCellView {
+            cellView.onBeginRenaming?()
+        }
     }
 
     @objc func handleDeleteFile(_ sender: AnyObject) {

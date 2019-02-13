@@ -11,6 +11,8 @@ import Foundation
 import Witness
 import Differ
 
+// MARK: - NSTableColumn
+
 private extension NSTableColumn {
     convenience init(title: String, resizingMask: ResizingOptions = .autoresizingMask) {
         self.init(identifier: NSUserInterfaceItemIdentifier(rawValue: title))
@@ -18,6 +20,8 @@ private extension NSTableColumn {
         self.resizingMask = resizingMask
     }
 }
+
+// MARK: - NSOutlineView
 
 private extension NSOutlineView {
     enum Style {
@@ -47,6 +51,8 @@ private extension NSOutlineView {
         }
     }
 }
+
+// MARK: - FileTree
 
 public class FileTree: NSBox {
 
@@ -146,11 +152,6 @@ public class FileTree: NSBox {
         outlineView.reloadItem(path)
 
         guard let cellView = outlineView.view(atColumn: 0, row: index, makeIfNecessary: false) else { return nil }
-
-        // If we're using the default rows, begin the renaming session
-        if let cellView = cellView as? FileTreeCellView {
-            cellView.onBeginRenaming?()
-        }
 
         // The caller will use this to initiate editing
         return cellView
@@ -296,6 +297,8 @@ public class FileTree: NSBox {
     }
 }
 
+// MARK: - File system events
+
 extension FileTree {
     enum FSEventType: Equatable {
         case rename(from: String, to: String, inParent: URL)
@@ -317,8 +320,6 @@ extension FileTree {
     }
 
     private func setUpWitness() {
-//        Swift.print("Watching events at", rootPath)
-
         let flags: EventStreamCreateFlags = [
             EventStreamCreateFlags.FileEvents,
             EventStreamCreateFlags.MarkSelf,
@@ -389,7 +390,7 @@ extension FileTree {
     private func applyChangesToDirectory(atPath path: Path) {
         if directoryContentsCache[path] == nil {
             outlineView.reloadItem(path, reloadChildren: true)
-            // outlineView.sizeToFit()
+            outlineView.sizeToFit()
             return
         }
 
@@ -410,6 +411,9 @@ extension FileTree {
                     at: IndexSet(integer: index),
                     inParent: path,
                     withAnimation: NSTableView.AnimationOptions.slideUp)
+
+                let url = URL(fileURLWithPath: path).appendingPathComponent(prevFileNames[index])
+                self.onDeleteFile?(url.path)
             default:
                 break
             }
@@ -422,6 +426,9 @@ extension FileTree {
                     at: IndexSet(integer: index),
                     inParent: path,
                     withAnimation: NSTableView.AnimationOptions.slideDown)
+
+                let url = URL(fileURLWithPath: path).appendingPathComponent(nextFileNames[index])
+                self.onCreateFile?(url.path)
             default:
                 break
             }
@@ -429,53 +436,9 @@ extension FileTree {
 
         outlineView.endUpdates()
     }
-
-    private func handleDeleteFileEvent(atPath path: Path) {
-        onDeleteFile?(path)
-
-        guard let parent = outlineView.parent(forItem: path) else { return }
-
-        outlineView.reloadItem(parent, reloadChildren: true)
-        outlineView.sizeToFit()
-
-    }
-
-    private func handleCreateFileEvent(atPath path: Path) {
-        let url = URL(fileURLWithPath: path)
-
-        onCreateFile?(path)
-
-        let parentUrl = url.deletingLastPathComponent()
-        let parentPath = parentUrl.path
-
-        guard let parent = first(where: { ($0 as? String) == parentPath }) else { return }
-
-        outlineView.reloadItem(parent, reloadChildren: true)
-        outlineView.sizeToFit()
-    }
-
-    private func first(where: (Any) -> Bool) -> Any? {
-        func firstChild(_ item: Any, where: (Any) -> Bool) -> Any? {
-            if `where`(item) { return item }
-
-            let childCount = outlineView.numberOfChildren(ofItem: item)
-
-            for i in 0..<childCount {
-                if
-                    let child = outlineView.child(i, ofItem: item),
-                    let found = firstChild(child, where: `where`) {
-                    return found
-                }
-            }
-
-            return nil
-        }
-
-        guard let root = outlineView.child(0, ofItem: nil) else { return nil }
-
-        return firstChild(root, where: `where`)
-    }
 }
+
+// MARK: - NSOutlineViewDataSource
 
 extension FileTree: NSOutlineViewDataSource {
 
@@ -533,6 +496,8 @@ extension FileTree: NSOutlineViewDataSource {
     }
 }
 
+// MARK: - FileTreeRowView
+
 private class FileTreeRowView: NSTableRowView {
     public var drawsContextMenuOutline = false {
         didSet {
@@ -555,21 +520,6 @@ private class FileTreeRowView: NSTableRowView {
             }
             path.stroke()
         }
-    }
-}
-
-private class FileTreeCellView: NSTableCellView {
-
-    fileprivate var displayName: String?
-
-    public var onChangeBackgroundStyle: ((NSView.BackgroundStyle) -> Void)?
-
-    public var onBeginRenaming: (() -> Void)?
-
-    public var onEndRenaming: ((FileTree.Path) -> Void)?
-
-    override var backgroundStyle: NSView.BackgroundStyle {
-        didSet { onChangeBackgroundStyle?(backgroundStyle) }
     }
 }
 
@@ -634,20 +584,7 @@ extension FileTree: NSOutlineViewDelegate {
     }
 }
 
-extension FileTree: NSTextFieldDelegate {
-    public func controlTextDidEndEditing(_ obj: Notification) {
-//        print("Control text did end editing")
-
-        guard let textView = obj.object as? NSTextField else { return }
-
-        // If we're using the default rows, end the renaming session
-        if let cellView = textView.superview as? FileTreeCellView {
-            cellView.onEndRenaming?(textView.stringValue)
-        }
-
-        endRenamingFile()
-    }
-}
+// MARK: - NSMenuDelegate
 
 extension FileTree: NSMenuDelegate {
     public func menuDidClose(_ menu: NSMenu) {
@@ -667,6 +604,27 @@ extension FileTree: NSMenuDelegate {
 
 extension FileTree {
 
+    public class DefaultCellView: NSTableCellView, NSTextFieldDelegate {
+
+        public var onChangeBackgroundStyle: ((NSView.BackgroundStyle) -> Void)?
+
+        public var onBeginRenaming: (() -> Void)?
+
+        public var onEndRenaming: ((FileTree.Path) -> Void)?
+
+        override public var backgroundStyle: NSView.BackgroundStyle {
+            didSet { onChangeBackgroundStyle?(backgroundStyle) }
+        }
+
+        public func controlTextDidEndEditing(_ obj: Notification) {
+            guard let textView = obj.object as? NSTextField else { return }
+
+            if let cellView = textView.superview as? DefaultCellView {
+                cellView.onEndRenaming?(textView.stringValue)
+            }
+        }
+    }
+
     // A default configuration, provided for convenience.
     public static func makeDefaultTree(rootPath: Path? = nil) -> FileTree {
         let fileTree = FileTree(rootPath: rootPath)
@@ -680,8 +638,7 @@ extension FileTree {
             let thumbnailMargin = fileTree.defaultThumbnailMargin
             let name = fileTree.displayNameForFile?(path) ?? URL(fileURLWithPath: path).lastPathComponent
 
-            let view = FileTreeCellView()
-            view.displayName = name
+            let view = DefaultCellView()
 
             let textView = NSTextField(labelWithString: name)
 
@@ -722,7 +679,7 @@ extension FileTree {
             }
 
             view.onBeginRenaming = {
-                textView.delegate = fileTree
+                textView.delegate = view
                 NSApp.activate(ignoringOtherApps: true)
                 fileTree.window?.makeFirstResponder(textView)
             }
@@ -743,6 +700,8 @@ extension FileTree {
 
                     fileTree.onRenameFile?(path, newPath)
                 }
+
+                fileTree.endRenamingFile()
             }
 
             return view
