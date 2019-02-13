@@ -297,6 +297,25 @@ public class FileTree: NSBox {
 }
 
 extension FileTree {
+    enum FSEventType: Equatable {
+        case rename(from: String, to: String, inParent: URL)
+        case directory(URL)
+
+        var directoryURL: URL? {
+            switch self {
+            case .rename:
+                return nil
+            case .directory(let url):
+                return url
+            }
+        }
+    }
+
+    struct FSEvent {
+        let path: String
+        let eventType: FSEventType
+    }
+
     private func setUpWitness() {
 //        Swift.print("Watching events at", rootPath)
 
@@ -308,25 +327,68 @@ extension FileTree {
         self.witness = Witness(paths: [rootPath], flags: flags, latency: 0) { events in
 //            print("file system events received: \(events)")
 
+            var fsEvents: [FSEvent] = []
+
+            var i = 0
+            while i < events.count {
+                let event = events[i]
+                let eventURL = URL(fileURLWithPath: event.path)
+
+                // Ignore events for files we don't display
+                if !self.shouldDisplay(fileName: eventURL.lastPathComponent) {
+                    i += 1
+
+                    continue
+                }
+
+                let eventParentURL = eventURL.deletingLastPathComponent()
+
+                if let next = i + 1 < events.count ? events[i + 1] : nil,
+                    event.flags.contains(.ItemRenamed) &&
+                    next.flags.contains(.ItemRenamed) {
+
+                    let nextURL = URL(fileURLWithPath: next.path)
+
+                    if eventParentURL == nextURL.deletingLastPathComponent() {
+                        fsEvents.append(
+                            FSEvent(
+                                path: event.path,
+                                eventType: .rename(
+                                    from: eventURL.lastPathComponent,
+                                    to: nextURL.lastPathComponent,
+                                    inParent: eventParentURL)))
+
+                        i += 2
+
+                        continue
+                    }
+                }
+
+                if event.flags.contains(.ItemIsFile) {
+                    fsEvents.append(FSEvent(path: event.path, eventType: .directory(eventParentURL)))
+                } else if event.flags.contains(.ItemIsDir) {
+                    fsEvents.append(FSEvent(path: event.path, eventType: .directory(eventURL)))
+                }
+
+                i += 1
+            }
+
+            Swift.print(fsEvents)
+
             DispatchQueue.main.async {
-                events.forEach { event in
-                    let url = URL(fileURLWithPath: event.path)
-                    if !self.shouldDisplay(fileName: url.lastPathComponent) { return }
-
-//                    Swift.print("FS Event", event)
-
-                    if event.flags.contains(.ItemIsFile) {
-                        let parent = url.deletingLastPathComponent()
-                        self.applyChangesToDirectory(atPath: parent.path)
-                    } else if event.flags.contains(.ItemIsDir) {
-                        self.applyChangesToDirectory(atPath: event.path)
+                fsEvents.forEach { fsEvent in
+                    switch fsEvent.eventType {
+                    case let .rename(from: from, to: to, inParent: parentURL):
+                        self.applyChangesToDirectory(atPath: parentURL.path, pathMapping: [to: from])
+                    case .directory(let url):
+                        self.applyChangesToDirectory(atPath: url.path)
                     }
                 }
             }
         }
     }
 
-    private func applyChangesToDirectory(atPath path: Path) {
+    private func applyChangesToDirectory(atPath path: Path, pathMapping: [String: String] = [:]) {
         if directoryContentsCache[path] == nil {
             outlineView.reloadItem(path, reloadChildren: true)
             // outlineView.sizeToFit()
@@ -340,7 +402,16 @@ extension FileTree {
 
         directoryContentsCache[path] = nextFileNames
 
-        let extendedDiff = prevFileNames.extendedDiff(nextFileNames)
+        // Match renamed indexes
+        let extendedDiff = prevFileNames.extendedDiff(nextFileNames, isEqual: { prev, next in
+            if let found = pathMapping[next] {
+                if found == prev {
+                    return true
+                }
+            }
+
+            return prev == next
+        })
 
         // Process deletions first, since these will affect the indexes of insertions
         extendedDiff.elements.forEach { element in
@@ -372,12 +443,13 @@ extension FileTree {
         extendedDiff.elements.forEach { element in
             switch element {
             case let .move(from, to):
-                // TODO: We're not actually getting moves during renames, since we first need to know
-                // if a rename occurred (to the diff algorithm, it looks like a different path).
-                Swift.print("Move", from, path, to, path)
+                Swift.print("Move", from, to, path)
                 outlineView.moveItem(
                     at: from, inParent: path,
                     to: to, inParent: path)
+                let item = URL(fileURLWithPath: path).appendingPathComponent(prevFileNames[from])
+                let row = outlineView.row(forItem: item.path)
+                outlineView.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integer: 0))
             default:
                 break
             }
