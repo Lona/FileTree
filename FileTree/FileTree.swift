@@ -573,7 +573,9 @@ private class FileTreeCellView: NSTableCellView {
     }
 }
 
-extension FileTree: NSOutlineViewDelegate {
+// MARK: - RowViewOptions
+
+extension FileTree {
 
     public struct RowViewOptions: OptionSet {
         public init(rawValue: Int) {
@@ -586,86 +588,6 @@ extension FileTree: NSOutlineViewDelegate {
         public static let hasActiveContextMenu = RowViewOptions(rawValue: 1 << 1)
 
         public static let none: RowViewOptions = []
-    }
-
-    private func rowHeightForFile(atPath path: String) -> CGFloat {
-        return rowHeightForFile?(path) ?? defaultRowHeight
-    }
-
-    private func imageForFile(atPath path: String, size: NSSize) -> NSImage {
-        return NSWorkspace.shared.icon(forFile: path)
-    }
-
-    private func rowViewForFile(atPath path: String, options: RowViewOptions) -> NSView {
-        let thumbnailSize = defaultThumbnailSize
-        let thumbnailMargin = defaultThumbnailMargin
-        let name = displayNameForFile?(path) ?? URL(fileURLWithPath: path).lastPathComponent
-
-        let view = FileTreeCellView()
-        view.displayName = name
-
-        let textView = NSTextField(labelWithString: name)
-
-        if options.contains(.editable) {
-            textView.isEditable = true
-            textView.isEnabled = true
-        }
-
-        let imageView = NSImageView(image: imageForFile?(path, thumbnailSize) ?? imageForFile(atPath: path, size: thumbnailSize))
-        imageView.imageScaling = .scaleProportionallyUpOrDown
-
-        view.addSubview(textView)
-        view.addSubview(imageView)
-
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin).isActive = true
-        imageView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
-        imageView.widthAnchor.constraint(equalToConstant: thumbnailSize.width).isActive = true
-        imageView.heightAnchor.constraint(equalToConstant: thumbnailSize.height).isActive = true
-
-        textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize.width).isActive = true
-        textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4).isActive = true
-        textView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
-        textView.font = defaultFont
-        textView.maximumNumberOfLines = 1
-        textView.lineBreakMode = .byTruncatingMiddle
-
-        view.onChangeBackgroundStyle = { style in
-            switch style {
-            case .light:
-                textView.textColor = NSColor.controlTextColor
-            case .dark:
-                textView.textColor = NSColor.selectedControlTextColor
-            default:
-                break
-            }
-        }
-
-        view.onBeginRenaming = { [unowned self] in
-            textView.delegate = self
-            NSApp.activate(ignoringOtherApps: true)
-            self.window?.makeFirstResponder(textView)
-        }
-
-        view.onEndRenaming = { [unowned self] newName in
-            textView.delegate = nil
-
-            if newName != name {
-                let newPath = URL(fileURLWithPath: path)
-                    .deletingLastPathComponent()
-                    .appendingPathComponent(newName)
-                    .path
-                do {
-                    try FileManager.default.moveItem(atPath: path, toPath: newPath)
-                } catch {
-                    Swift.print("Failed to rename \(path) to \(newPath)")
-                }
-                self.onRenameFile?(path, newPath)
-            }
-        }
-
-        return view
     }
 
     private func rowViewOptions(atPath path: Path) -> RowViewOptions {
@@ -681,6 +603,11 @@ extension FileTree: NSOutlineViewDelegate {
 
         return options
     }
+}
+
+// MARK: - NSOutlineViewDelegate
+
+extension FileTree: NSOutlineViewDelegate {
 
     public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         let rowView = FileTreeRowView()
@@ -697,13 +624,13 @@ extension FileTree: NSOutlineViewDelegate {
 
         let options = rowViewOptions(atPath: path)
 
-        return rowViewForFile?(path, options) ?? rowViewForFile(atPath: path, options: options)
+        return rowViewForFile?(path, options)
     }
 
     public func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         guard let path = item as? String else { return defaultRowHeight }
 
-        return rowHeightForFile(atPath: path)
+        return rowHeightForFile?(path) ?? defaultRowHeight
     }
 }
 
@@ -733,5 +660,94 @@ extension FileTree: NSMenuDelegate {
                 rowView.drawsContextMenuOutline = false
             }
         }
+    }
+}
+
+// MARK: - Configurations
+
+extension FileTree {
+
+    // A default configuration, provided for convenience.
+    public static func makeDefaultTree(rootPath: Path? = nil) -> FileTree {
+        let fileTree = FileTree(rootPath: rootPath)
+
+        fileTree.imageForFile = { path, size in
+            return NSWorkspace.shared.icon(forFile: path)
+        }
+
+        fileTree.rowViewForFile = { path, options in
+            let thumbnailSize = fileTree.defaultThumbnailSize
+            let thumbnailMargin = fileTree.defaultThumbnailMargin
+            let name = fileTree.displayNameForFile?(path) ?? URL(fileURLWithPath: path).lastPathComponent
+
+            let view = FileTreeCellView()
+            view.displayName = name
+
+            let textView = NSTextField(labelWithString: name)
+
+            if options.contains(.editable) {
+                textView.isEditable = true
+                textView.isEnabled = true
+            }
+
+            let imageView = NSImageView(image: fileTree.imageForFile?(path, thumbnailSize) ?? NSImage())
+            imageView.imageScaling = .scaleProportionallyUpOrDown
+
+            view.addSubview(textView)
+            view.addSubview(imageView)
+
+            imageView.translatesAutoresizingMaskIntoConstraints = false
+            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin).isActive = true
+            imageView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+            imageView.widthAnchor.constraint(equalToConstant: thumbnailSize.width).isActive = true
+            imageView.heightAnchor.constraint(equalToConstant: thumbnailSize.height).isActive = true
+
+            textView.translatesAutoresizingMaskIntoConstraints = false
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: thumbnailMargin * 2 + thumbnailSize.width).isActive = true
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -4).isActive = true
+            textView.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
+            textView.font = fileTree.defaultFont
+            textView.maximumNumberOfLines = 1
+            textView.lineBreakMode = .byTruncatingMiddle
+
+            view.onChangeBackgroundStyle = { style in
+                switch style {
+                case .light:
+                    textView.textColor = NSColor.controlTextColor
+                case .dark:
+                    textView.textColor = NSColor.selectedControlTextColor
+                default:
+                    break
+                }
+            }
+
+            view.onBeginRenaming = {
+                textView.delegate = fileTree
+                NSApp.activate(ignoringOtherApps: true)
+                fileTree.window?.makeFirstResponder(textView)
+            }
+
+            view.onEndRenaming = { newName in
+                textView.delegate = nil
+
+                if newName != name {
+                    let newPath = URL(fileURLWithPath: path)
+                        .deletingLastPathComponent()
+                        .appendingPathComponent(newName)
+                        .path
+                    do {
+                        try FileManager.default.moveItem(atPath: path, toPath: newPath)
+                    } catch {
+                        Swift.print("Failed to rename \(path) to \(newPath)")
+                    }
+
+                    fileTree.onRenameFile?(path, newPath)
+                }
+            }
+
+            return view
+        }
+
+        return fileTree
     }
 }
