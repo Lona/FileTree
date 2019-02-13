@@ -11,6 +11,21 @@ import Foundation
 import Witness
 import Differ
 
+private func isDirectory(path: FileTree.Path) -> Bool {
+    var isDir: ObjCBool = false
+    if FileManager.default.fileExists(atPath: path, isDirectory: &isDir) {
+        return isDir.boolValue
+    } else {
+        return false
+    }
+}
+
+// MARK: - NSPasteboard.PasteboardType
+
+public extension NSPasteboard.PasteboardType {
+    static let fileTreeIndex = NSPasteboard.PasteboardType(rawValue: "filetree.index")
+}
+
 // MARK: - NSTableColumn
 
 private extension NSTableColumn {
@@ -85,6 +100,8 @@ public class FileTree: NSBox {
 
         setUpWitness()
 
+        outlineView.registerForDraggedTypes([.fileTreeIndex])
+
         initialized = true
     }
 
@@ -99,6 +116,12 @@ public class FileTree: NSBox {
     public var onDeleteFile: ((Path, FileEventOptions) -> Void)?
 
     public var onRenameFile: ((Path, Path, FileEventOptions) -> Void)?
+
+    public var onPressDelete: ((Path) -> Void)?
+
+    public var onPressEnter: ((Path) -> Void)?
+
+    public var performMoveFile: ((Path, Path) -> Bool)?
 
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
@@ -123,6 +146,8 @@ public class FileTree: NSBox {
     public var sortFiles: ((Name, Name) -> Bool)? { didSet { update() } }
 
     public var filterFiles: ((Name) -> Bool)? { didSet { update() } }
+
+    public var validateProposedMove: ((Path, Path) -> Bool)?
 
     public var showHiddenFiles = false { didSet { update() } }
 
@@ -256,6 +281,20 @@ public class FileTree: NSBox {
         return nil
     }
 
+    override public func keyDown(with event: NSEvent) {
+        let row = outlineView.selectedRow
+        guard let path = outlineView.item(atRow: row) as? Path else { return }
+
+        switch event.keyCode {
+        case 51: // Delete
+            onPressDelete?(path)
+        case 36: // Enter
+            onPressEnter?(path)
+        default:
+            break
+        }
+    }
+
     func setUpViews() {
         boxType = .custom
         borderType = .lineBorder
@@ -310,7 +349,7 @@ extension FileTree {
             case .rename(_, _, inParent: let url, _):
                 return url
             case .directory(let url, _):
-                return url
+                return url.deletingLastPathComponent()
             case .file(let url, _):
                 return url.deletingLastPathComponent()
             }
@@ -348,7 +387,7 @@ extension FileTree {
             EventStreamCreateFlags.MarkSelf,
             EventStreamCreateFlags.WatchRoot]
 
-        self.witness = Witness(paths: [rootPath], flags: flags, latency: 0) { events in
+        self.witness = Witness(paths: [rootPath], flags: flags, latency: 0.150) { events in
             var fsEvents: [FSEvent] = []
 
             // When a file is renamed, we receive two consecutive events with .ItemRenamed set.
@@ -576,6 +615,85 @@ extension FileTree: NSOutlineViewDataSource {
     public func outlineView(_ outlineView: NSOutlineView, objectValueFor tableColumn: NSTableColumn?, byItem item: Any?) -> Any? {
         return item
     }
+
+    // MARK: - Drag and drop
+
+    typealias Element = Path
+
+    public func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
+        let pasteboardItem = NSPasteboardItem()
+        let index = outlineView.row(forItem: item)
+
+        pasteboardItem.setString(String(index), forType: .fileTreeIndex)
+
+        return pasteboardItem
+    }
+
+    public func outlineView(_ outlineView: NSOutlineView, validateDrop info: NSDraggingInfo, proposedItem item: Any?, proposedChildIndex index: Int) -> NSDragOperation {
+
+        let sourceIndexString = info.draggingPasteboard.string(forType: .fileTreeIndex)
+
+        if let sourceIndexString = sourceIndexString,
+            let sourceIndex = Int(sourceIndexString),
+            let sourceItem = outlineView.item(atRow: sourceIndex) as? Element,
+            let relativeItem = item as? Element? {
+
+            let acceptanceCategory = outlineView.shouldAccept(dropping: sourceItem, relativeTo: relativeItem, at: index)
+
+            switch acceptanceCategory {
+            case .into(parent: let parentItem, _):
+                let sourceItemPath = URL(fileURLWithPath: sourceItem)
+                let proposedPath = URL(fileURLWithPath: parentItem).appendingPathComponent(sourceItemPath.lastPathComponent).path
+
+                if let path = relativeItem, isDirectory(path: path) && validateProposedMoveInternal(oldPath: sourceItem, newPath: proposedPath) {
+                    return NSDragOperation.move
+                }
+            case .intoContainer:
+                let sourceItemPath = URL(fileURLWithPath: sourceItem)
+                let proposedPath = URL(fileURLWithPath: rootPath).appendingPathComponent(sourceItemPath.lastPathComponent).path
+
+                if !showRootFile && validateProposedMoveInternal(oldPath: sourceItem, newPath: proposedPath) {
+                    return NSDragOperation()
+                }
+
+                return NSDragOperation.move
+            default: break
+            }
+        }
+
+        return NSDragOperation()
+    }
+
+    public func outlineView(_ outlineView: NSOutlineView, acceptDrop info: NSDraggingInfo, item: Any?, childIndex index: Int) -> Bool {
+        let sourceIndexString = info.draggingPasteboard.string(forType: .fileTreeIndex)
+
+        if let sourceIndexString = sourceIndexString,
+            let sourceIndex = Int(sourceIndexString),
+            let sourceItem = outlineView.item(atRow: sourceIndex) as? Element,
+            let relativeItem = item as? Element? {
+
+            let acceptanceCategory = outlineView.shouldAccept(dropping: sourceItem, relativeTo: relativeItem, at: index)
+
+            switch acceptanceCategory {
+            case .into(parent: let parentItem, _):
+                let sourceItemPath = URL(fileURLWithPath: sourceItem)
+                let proposedPath = URL(fileURLWithPath: parentItem).appendingPathComponent(sourceItemPath.lastPathComponent).path
+                return performMoveFile?(sourceItem, proposedPath) ?? false
+            case .intoContainer(_):
+                let sourceItemPath = URL(fileURLWithPath: sourceItem)
+                let proposedPath = URL(fileURLWithPath: rootPath).appendingPathComponent(sourceItemPath.lastPathComponent).path
+                return performMoveFile?(sourceItem, proposedPath) ?? false
+            default:
+                break
+            }
+        }
+
+        return false
+    }
+
+    private func validateProposedMoveInternal(oldPath: Path, newPath: Path) -> Bool {
+        return oldPath != newPath && validateProposedMove?(oldPath, newPath) ?? true
+    }
 }
 
 // MARK: - FileTreeRowView
@@ -787,22 +905,28 @@ extension FileTree {
             view.onEndRenaming = { newName in
                 textView.delegate = nil
 
+                fileTree.endRenamingFile()
+
                 if newName != name {
                     let newPath = URL(fileURLWithPath: path)
                         .deletingLastPathComponent()
                         .appendingPathComponent(newName)
                         .path
-                    do {
-                        try FileManager.default.moveItem(atPath: path, toPath: newPath)
-                    } catch {
-                        Swift.print("Failed to rename \(path) to \(newPath)")
-                    }
+                    let _ = fileTree.performMoveFile?(path, newPath)
                 }
-
-                fileTree.endRenamingFile()
             }
 
             return view
+        }
+
+        fileTree.performMoveFile = { oldPath, newPath in
+            do {
+                try FileManager.default.moveItem(atPath: oldPath, toPath: newPath)
+                return true
+            } catch {
+                Swift.print("Failed to move \(oldPath) to \(newPath)")
+                return false
+            }
         }
 
         return fileTree

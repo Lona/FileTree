@@ -62,6 +62,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Swift.print("Delete file \(path) [\(ownEvent)]")
         }
 
+        fileTree.onPressEnter = { path in
+            Swift.print("Press enter \(path)")
+        }
+
+        fileTree.onPressDelete = { path in
+            Swift.print("Press delete \(path)")
+        }
+
+        fileTree.validateProposedMove = { sourcePath, targetPath in
+//            Swift.print("Validate \(sourcePath) -> \(targetPath)")
+            return true
+        }
+
         fileTree.menuForFile = { [unowned self] path in
             let menu = NSMenu(title: "Menu")
 

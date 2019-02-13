@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		6B23DBE2212B1CE400614C77 /* FileTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B23DBE1212B1CE400614C77 /* FileTree.swift */; };
 		6B746B642213AB5D00D3B805 /* Differ.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B746B632213AB5D00D3B805 /* Differ.framework */; };
+		6B746B6A2214C6FE00D3B805 /* NSOutlineView+Dragging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B746B692214C6FE00D3B805 /* NSOutlineView+Dragging.swift */; };
 		6BBE0F71212B4F8D00CEE8C1 /* Witness.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6BBE0F6F212B4E2600CEE8C1 /* Witness.framework */; };
 		6BD2BA59212B1BE00092797B /* FileTree.h in Headers */ = {isa = PBXBuildFile; fileRef = 6BD2BA57212B1BE00092797B /* FileTree.h */; settings = {ATTRIBUTES = (Public, ); }; };
 /* End PBXBuildFile section */
@@ -16,6 +17,7 @@
 /* Begin PBXFileReference section */
 		6B23DBE1212B1CE400614C77 /* FileTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTree.swift; sourceTree = "<group>"; };
 		6B746B632213AB5D00D3B805 /* Differ.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Differ.framework; path = Carthage/Build/Mac/Differ.framework; sourceTree = "<group>"; };
+		6B746B692214C6FE00D3B805 /* NSOutlineView+Dragging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSOutlineView+Dragging.swift"; sourceTree = "<group>"; };
 		6BBE0F6F212B4E2600CEE8C1 /* Witness.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Witness.framework; path = Carthage/Build/Mac/Witness.framework; sourceTree = "<group>"; };
 		6BD2BA54212B1BE00092797B /* FileTree.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = FileTree.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		6BD2BA57212B1BE00092797B /* FileTree.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FileTree.h; sourceTree = "<group>"; };
@@ -67,6 +69,7 @@
 				6BD2BA57212B1BE00092797B /* FileTree.h */,
 				6BD2BA58212B1BE00092797B /* Info.plist */,
 				6B23DBE1212B1CE400614C77 /* FileTree.swift */,
+				6B746B692214C6FE00D3B805 /* NSOutlineView+Dragging.swift */,
 			);
 			path = FileTree;
 			sourceTree = "<group>";
@@ -151,6 +154,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6B23DBE2212B1CE400614C77 /* FileTree.swift in Sources */,
+				6B746B6A2214C6FE00D3B805 /* NSOutlineView+Dragging.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
