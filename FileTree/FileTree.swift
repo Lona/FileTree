@@ -306,27 +306,125 @@ extension FileTree {
     private func setUpWitness() {
 //        Swift.print("Watching events at", rootPath)
 
-        self.witness = Witness(paths: [rootPath], flags: .FileEvents, latency: 0) { events in
+        let flags: EventStreamCreateFlags = [
+            EventStreamCreateFlags.FileEvents,
+            EventStreamCreateFlags.MarkSelf,
+            EventStreamCreateFlags.WatchRoot]
+
+        self.witness = Witness(paths: [rootPath], flags: flags, latency: 0) { events in
 //            print("file system events received: \(events)")
+
             DispatchQueue.main.async {
                 events.forEach { event in
-                    if event.flags.contains(.ItemCreated) {
-//                        Swift.print("Create event", event)
-                        self.handleCreateFileEvent(atPath: event.path)
-                    } else if event.flags.contains(.ItemRemoved) {
-//                        Swift.print("Delete event", event)
-                        self.handleDeleteFileEvent(atPath: event.path)
+                    let url = URL(fileURLWithPath: event.path)
+                    if !self.shouldDisplay(fileName: url.lastPathComponent) { return }
+
+                    Swift.print("FS Event", event)
+
+                    if event.flags.contains(.ItemIsFile) {
+                        let parent = url.deletingLastPathComponent()
+                        let change = self.directoryChange(atPath: parent.path)
+
+                        self.apply(directoryChange: change)
+                    } else if event.flags.contains(.ItemIsDir) {
+                        let change = self.directoryChange(atPath: event.path)
+
+                        self.apply(directoryChange: change)
                     }
+//
+//                    if event.flags.contains(.ItemCreated) || event.flags.contains(.ItemRenamed){
+//                        Swift.print("Create event", event)
+//                        self.handleCreateFileEvent(atPath: event.path)
+//                    } else if event.flags.contains(.ItemRemoved) {
+//                        Swift.print("Delete event", event)
+//                        self.handleDeleteFileEvent(atPath: event.path)
+//                    }
                 }
             }
         }
     }
 
+    public enum ItemChangeType {
+        case added(Int)
+        case removed(Int)
+        case moved(Int, Int)
+    }
+
+    public struct ItemChange {
+        let path: String
+        let type: ItemChangeType
+    }
+
+    public struct DirectoryChange {
+        let path: String
+        let nextFileNames: [String]
+        let hasPreviousState: Bool
+        let previousFileNames: [String]
+        let itemChanges: [ItemChange]
+    }
+
+    private func directoryChange(atPath path: Path) -> DirectoryChange {
+        let newNames = contentsOfDirectory(atPath: path)
+        let oldNames = directoryContentsCache[path] ?? []
+
+        Swift.print("Old names", oldNames)
+        Swift.print("New names", newNames)
+
+        let oldSet = Set(oldNames)
+        let newSet = Set(newNames)
+
+        let removed: [ItemChange] = oldSet.subtracting(newSet).map { item in
+            let index = oldNames.firstIndex(of: item)!
+            return ItemChange(path: item, type: .removed(index))
+        }
+
+        let added: [ItemChange] = newSet.subtracting(oldSet).map { item in
+            let index = newNames.firstIndex(of: item)!
+            return ItemChange(path: item, type: .added(index))
+        }
+
+        return DirectoryChange(
+            path: path,
+            nextFileNames: newNames,
+            hasPreviousState: directoryContentsCache[path] != nil,
+            previousFileNames: oldNames,
+            itemChanges: Array([added, removed].joined()))
+    }
+
+    private func apply(directoryChange: DirectoryChange) {
+        if !directoryChange.hasPreviousState {
+            outlineView.reloadItem(directoryChange.path, reloadChildren: true)
+            // outlineView.sizeToFit()
+            return
+        }
+
+        Swift.print("Applying dir change", directoryChange)
+
+        outlineView.beginUpdates()
+
+        directoryContentsCache[directoryChange.path] = directoryChange.nextFileNames
+
+        directoryChange.itemChanges.forEach { change in
+            switch change.type {
+            case .added(let index):
+                outlineView.insertItems(
+                    at: IndexSet(integer: index),
+                    inParent: directoryChange.path,
+                    withAnimation: NSTableView.AnimationOptions.slideDown)
+            case .removed(let index):
+                outlineView.removeItems(
+                    at: IndexSet(integer: index),
+                    inParent: directoryChange.path,
+                    withAnimation: NSTableView.AnimationOptions.slideUp)
+            case .moved(_, _):
+                break
+            }
+        }
+
+        outlineView.endUpdates()
+    }
+
     private func handleDeleteFileEvent(atPath path: Path) {
-        let url = URL(fileURLWithPath: path)
-
-        if !shouldDisplay(fileName: url.lastPathComponent) { return }
-
         onDeleteFile?(path)
 
         guard let parent = outlineView.parent(forItem: path) else { return }
@@ -338,8 +436,6 @@ extension FileTree {
 
     private func handleCreateFileEvent(atPath path: Path) {
         let url = URL(fileURLWithPath: path)
-
-        if !shouldDisplay(fileName: url.lastPathComponent) { return }
 
         onCreateFile?(path)
 

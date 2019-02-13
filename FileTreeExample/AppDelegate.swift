@@ -119,9 +119,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         Swift.print("New file \(newFilePath)")
 
-        FileManager.default.createFile(atPath: newFilePath, contents: Data(), attributes: nil)
+//        fileTree.createFile(atPath: newFilePath, contents: Data())
 
-        fileTree.reloadData()
+        FileManager.default.createFile(atPath: newFilePath, contents: Data(), attributes: nil)
+//
+//        fileTree.reloadData()
     }
 
     @objc func handleNewDirectory(_ sender: AnyObject) {
@@ -140,6 +142,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 atPath: newFilePath,
                 withIntermediateDirectories: true,
                 attributes: nil)
+
+            fileTree.reloadData()
         } catch {
             Swift.print("Failed to create directory \(newFileName)")
         }
