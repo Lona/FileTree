@@ -373,13 +373,11 @@ extension FileTree {
                 i += 1
             }
 
-            Swift.print(fsEvents)
-
             DispatchQueue.main.async {
                 fsEvents.forEach { fsEvent in
                     switch fsEvent.eventType {
-                    case let .rename(from: from, to: to, inParent: parentURL):
-                        self.applyChangesToDirectory(atPath: parentURL.path, pathMapping: [to: from])
+                    case let .rename(from: _, to: _, inParent: parentURL):
+                        self.applyChangesToDirectory(atPath: parentURL.path)
                     case .directory(let url):
                         self.applyChangesToDirectory(atPath: url.path)
                     }
@@ -388,7 +386,7 @@ extension FileTree {
         }
     }
 
-    private func applyChangesToDirectory(atPath path: Path, pathMapping: [String: String] = [:]) {
+    private func applyChangesToDirectory(atPath path: Path) {
         if directoryContentsCache[path] == nil {
             outlineView.reloadItem(path, reloadChildren: true)
             // outlineView.sizeToFit()
@@ -402,22 +400,12 @@ extension FileTree {
 
         directoryContentsCache[path] = nextFileNames
 
-        // Match renamed indexes
-        let extendedDiff = prevFileNames.extendedDiff(nextFileNames, isEqual: { prev, next in
-            if let found = pathMapping[next] {
-                if found == prev {
-                    return true
-                }
-            }
-
-            return prev == next
-        })
+        let diff = prevFileNames.diff(nextFileNames)
 
         // Process deletions first, since these will affect the indexes of insertions
-        extendedDiff.elements.forEach { element in
+        diff.elements.forEach { element in
             switch element {
             case let .delete(at: index):
-                Swift.print("Remove", index, prevFileNames[index])
                 outlineView.removeItems(
                     at: IndexSet(integer: index),
                     inParent: path,
@@ -427,29 +415,13 @@ extension FileTree {
             }
         }
 
-        extendedDiff.elements.forEach { element in
+        diff.elements.forEach { element in
             switch element {
             case let .insert(at: index):
-                Swift.print("Insert", index, nextFileNames[index])
                 outlineView.insertItems(
                     at: IndexSet(integer: index),
                     inParent: path,
                     withAnimation: NSTableView.AnimationOptions.slideDown)
-            default:
-                break
-            }
-        }
-
-        extendedDiff.elements.forEach { element in
-            switch element {
-            case let .move(from, to):
-                Swift.print("Move", from, to, path)
-                outlineView.moveItem(
-                    at: from, inParent: path,
-                    to: to, inParent: path)
-                let item = URL(fileURLWithPath: path).appendingPathComponent(prevFileNames[from])
-                let row = outlineView.row(forItem: item.path)
-                outlineView.reloadData(forRowIndexes: IndexSet(integer: row), columnIndexes: IndexSet(integer: 0))
             default:
                 break
             }
