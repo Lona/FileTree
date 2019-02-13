@@ -47,16 +47,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Swift.print("Selected \(path)")
         }
 
-        fileTree.onRenameFile = { oldPath, newPath in
-            Swift.print("Renamed \(oldPath) to \(newPath)")
+        fileTree.onRenameFile = { oldPath, newPath, options in
+            let ownEvent = options.contains(.ownEvent)
+            Swift.print("Renamed \(oldPath) to \(newPath) [\(ownEvent)]")
         }
 
-        fileTree.onCreateFile = { path in
-            Swift.print("Create file \(path)")
+        fileTree.onCreateFile = { path, options in
+            let ownEvent = options.contains(.ownEvent)
+            Swift.print("Create file \(path) [\(ownEvent)]")
         }
 
-        fileTree.onDeleteFile = { path in
-            Swift.print("Delete file \(path)")
+        fileTree.onDeleteFile = { path, options in
+            let ownEvent = options.contains(.ownEvent)
+            Swift.print("Delete file \(path) [\(ownEvent)]")
         }
 
         fileTree.menuForFile = { [unowned self] path in

@@ -94,11 +94,11 @@ public class FileTree: NSBox {
 
     public var onSelect: ((Path) -> Void)?
 
-    public var onCreateFile: ((Path) -> Void)?
+    public var onCreateFile: ((Path, FileEventOptions) -> Void)?
 
-    public var onDeleteFile: ((Path) -> Void)?
+    public var onDeleteFile: ((Path, FileEventOptions) -> Void)?
 
-    public var onRenameFile: ((Path, Path) -> Void)?
+    public var onRenameFile: ((Path, Path, FileEventOptions) -> Void)?
 
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
@@ -301,15 +301,38 @@ public class FileTree: NSBox {
 
 extension FileTree {
     enum FSEventType: Equatable {
-        case rename(from: String, to: String, inParent: URL)
-        case directory(URL)
+        case rename(from: String, to: String, inParent: URL, ownEvent: Bool)
+        case directory(URL, ownEvent: Bool)
+        case file(URL, ownEvent: Bool)
 
-        var directoryURL: URL? {
+        var directoryURL: URL {
             switch self {
-            case .rename:
-                return nil
-            case .directory(let url):
+            case .rename(_, _, inParent: let url, _):
                 return url
+            case .directory(let url, _):
+                return url
+            case .file(let url, _):
+                return url.deletingLastPathComponent()
+            }
+        }
+
+        var nameMapping: (from: String, to: String)? {
+            switch self {
+            case let .rename(from: from, to: to, _, _):
+                return (from: from, to: to)
+            default:
+                return nil
+            }
+        }
+
+        var ownEventURL: URL? {
+            switch self {
+            case let .rename(_, to: to, inParent: parentURL, ownEvent: ownEvent):
+                return ownEvent ? parentURL.appendingPathComponent(to) : nil
+            case .directory(let url, let ownEvent):
+                return ownEvent ? url : nil
+            case .file(let url, let ownEvent):
+                return ownEvent ? url : nil
             }
         }
     }
@@ -326,8 +349,6 @@ extension FileTree {
             EventStreamCreateFlags.WatchRoot]
 
         self.witness = Witness(paths: [rootPath], flags: flags, latency: 0) { events in
-//            print("file system events received: \(events)")
-
             var fsEvents: [FSEvent] = []
 
             // When a file is renamed, we receive two consecutive events with .ItemRenamed set.
@@ -344,13 +365,14 @@ extension FileTree {
                     continue
                 }
 
-                let eventParentURL = eventURL.deletingLastPathComponent()
+                let ownEvent = event.flags.contains(.OwnEvent)
 
                 if let next = i + 1 < events.count ? events[i + 1] : nil,
                     event.flags.contains(.ItemRenamed) &&
                     next.flags.contains(.ItemRenamed) {
 
                     let nextURL = URL(fileURLWithPath: next.path)
+                    let eventParentURL = eventURL.deletingLastPathComponent()
 
                     if eventParentURL == nextURL.deletingLastPathComponent() {
                         fsEvents.append(
@@ -359,7 +381,8 @@ extension FileTree {
                                 eventType: .rename(
                                     from: eventURL.lastPathComponent,
                                     to: nextURL.lastPathComponent,
-                                    inParent: eventParentURL)))
+                                    inParent: eventParentURL,
+                                    ownEvent: ownEvent)))
 
                         i += 2
 
@@ -368,30 +391,59 @@ extension FileTree {
                 }
 
                 if event.flags.contains(.ItemIsFile) {
-                    fsEvents.append(FSEvent(path: event.path, eventType: .directory(eventParentURL)))
+                    fsEvents.append(
+                        FSEvent(path: event.path, eventType: .file(eventURL, ownEvent: ownEvent)))
                 } else if event.flags.contains(.ItemIsDir) {
-                    fsEvents.append(FSEvent(path: event.path, eventType: .directory(eventURL)))
+                    fsEvents.append(
+                        FSEvent(path: event.path, eventType: .directory(eventURL, ownEvent: ownEvent)))
                 }
 
                 i += 1
             }
 
-//            Swift.print(fsEvents)
+            // Group events by directory so that we can apply changes per-directory.
+            // We determine the actual changes to make by scanning the directory, not be the events
+            // we receive, so we should only need to process each directory once.
+            let eventsForDirectory: [String: [FSEvent]] = fsEvents.reduce([:], { acc, fsEvent in
+                var acc = acc
+
+                let directoryPath = fsEvent.eventType.directoryURL.path
+                if acc[directoryPath] == nil {
+                    acc[directoryPath] = []
+                }
+                acc[directoryPath]?.append(fsEvent)
+
+                return acc
+            })
 
             DispatchQueue.main.async {
-                fsEvents.forEach { fsEvent in
-                    switch fsEvent.eventType {
-                    case let .rename(from: from, to: to, inParent: parentURL):
-                        self.applyChangesToDirectory(atPath: parentURL.path, pathMapping: [to: from])
-                    case .directory(let url):
-                        self.applyChangesToDirectory(atPath: url.path)
+                eventsForDirectory.forEach { directoryPath, fsEvents in
+                    var nameMapping: [String: String] = [:]
+                    var ownEventPaths: [Path] = []
+
+                    fsEvents.forEach { fsEvent in
+                        if let mapping = fsEvent.eventType.nameMapping {
+                            nameMapping[mapping.to] = mapping.from
+                        }
+
+                        if let ownEventURL = fsEvent.eventType.ownEventURL {
+                            ownEventPaths.append(ownEventURL.path)
+                        }
                     }
+
+                    self.applyChangesToDirectory(
+                        atPath: directoryPath,
+                        nameMapping: nameMapping,
+                        ownEventPaths: ownEventPaths)
                 }
             }
         }
     }
 
-    private func applyChangesToDirectory(atPath path: Path, pathMapping: [String: String] = [:]) {
+    private func applyChangesToDirectory(
+        atPath path: Path,
+        nameMapping: [String: String] = [:],
+        ownEventPaths: [Path] = []) {
         if directoryContentsCache[path] == nil {
             outlineView.reloadItem(path, reloadChildren: true)
             outlineView.sizeToFit()
@@ -436,7 +488,7 @@ extension FileTree {
 
         // Filter out moves before firing created/deleted events
         let extendedDiff = prevFileNames.extendedDiff(nextFileNames, isEqual: { prev, next in
-            if let found = pathMapping[next] {
+            if let found = nameMapping[next] {
                 if found == prev {
                     return true
                 }
@@ -449,10 +501,10 @@ extension FileTree {
             switch element {
             case let .delete(at: index):
                 let url = URL(fileURLWithPath: path).appendingPathComponent(prevFileNames[index])
-                self.onDeleteFile?(url.path)
+                self.onDeleteFile?(url.path, ownEventPaths.contains(url.path) ? .ownEvent : .none)
             case let .insert(at: index):
                 let url = URL(fileURLWithPath: path).appendingPathComponent(nextFileNames[index])
-                self.onCreateFile?(url.path)
+                self.onCreateFile?(url.path, ownEventPaths.contains(url.path) ? .ownEvent : .none)
             case .move:
                 // Renames don't necessarily cause the position to change. Handle renames afterwards
                 // since we know which files have been renamed from the filesystem events
@@ -460,10 +512,10 @@ extension FileTree {
             }
         }
 
-        pathMapping.forEach { key, value in
+        nameMapping.forEach { key, value in
             let prevURL = URL(fileURLWithPath: path).appendingPathComponent(value)
             let nextURL = URL(fileURLWithPath: path).appendingPathComponent(key)
-            self.onRenameFile?(prevURL.path, nextURL.path)
+            self.onRenameFile?(prevURL.path, nextURL.path, ownEventPaths.contains(nextURL.path) ? .ownEvent : .none)
         }
     }
 }
@@ -550,6 +602,24 @@ private class FileTreeRowView: NSTableRowView {
             }
             path.stroke()
         }
+    }
+}
+
+// MARK: - FileEventOptions
+
+extension FileTree {
+
+    public struct FileEventOptions: OptionSet {
+        public init(rawValue: Int) {
+            self.rawValue = rawValue
+        }
+
+        public let rawValue: Int
+
+        // The filesystem operation that caused this event was triggered from this process
+        public static let ownEvent = FileEventOptions(rawValue: 1 << 0)
+
+        public static let none: FileEventOptions = []
     }
 }
 
