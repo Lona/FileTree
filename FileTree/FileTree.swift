@@ -9,6 +9,7 @@
 import AppKit
 import Foundation
 import Witness
+import Differ
 
 private extension NSTableColumn {
     convenience init(title: String, resizingMask: ResizingOptions = .autoresizingMask) {
@@ -156,14 +157,7 @@ public class FileTree: NSBox {
     }
 
     public func endRenamingFile() {
-        guard let path = renamingPath else { return }
-
         renamingPath = nil
-
-        guard let parent = outlineView.parent(forItem: path) else { return }
-
-        outlineView.reloadItem(parent, reloadChildren: true)
-        outlineView.sizeToFit()
     }
 
     private var renamingPath: String?
@@ -319,104 +313,72 @@ extension FileTree {
                     let url = URL(fileURLWithPath: event.path)
                     if !self.shouldDisplay(fileName: url.lastPathComponent) { return }
 
-                    Swift.print("FS Event", event)
+//                    Swift.print("FS Event", event)
 
                     if event.flags.contains(.ItemIsFile) {
                         let parent = url.deletingLastPathComponent()
-                        let change = self.directoryChange(atPath: parent.path)
-
-                        self.apply(directoryChange: change)
+                        self.applyChangesToDirectory(atPath: parent.path)
                     } else if event.flags.contains(.ItemIsDir) {
-                        let change = self.directoryChange(atPath: event.path)
-
-                        self.apply(directoryChange: change)
+                        self.applyChangesToDirectory(atPath: event.path)
                     }
-//
-//                    if event.flags.contains(.ItemCreated) || event.flags.contains(.ItemRenamed){
-//                        Swift.print("Create event", event)
-//                        self.handleCreateFileEvent(atPath: event.path)
-//                    } else if event.flags.contains(.ItemRemoved) {
-//                        Swift.print("Delete event", event)
-//                        self.handleDeleteFileEvent(atPath: event.path)
-//                    }
                 }
             }
         }
     }
 
-    public enum ItemChangeType {
-        case added(Int)
-        case removed(Int)
-        case moved(Int, Int)
-    }
-
-    public struct ItemChange {
-        let path: String
-        let type: ItemChangeType
-    }
-
-    public struct DirectoryChange {
-        let path: String
-        let nextFileNames: [String]
-        let hasPreviousState: Bool
-        let previousFileNames: [String]
-        let itemChanges: [ItemChange]
-    }
-
-    private func directoryChange(atPath path: Path) -> DirectoryChange {
-        let newNames = contentsOfDirectory(atPath: path)
-        let oldNames = directoryContentsCache[path] ?? []
-
-        Swift.print("Old names", oldNames)
-        Swift.print("New names", newNames)
-
-        let oldSet = Set(oldNames)
-        let newSet = Set(newNames)
-
-        let removed: [ItemChange] = oldSet.subtracting(newSet).map { item in
-            let index = oldNames.firstIndex(of: item)!
-            return ItemChange(path: item, type: .removed(index))
-        }
-
-        let added: [ItemChange] = newSet.subtracting(oldSet).map { item in
-            let index = newNames.firstIndex(of: item)!
-            return ItemChange(path: item, type: .added(index))
-        }
-
-        return DirectoryChange(
-            path: path,
-            nextFileNames: newNames,
-            hasPreviousState: directoryContentsCache[path] != nil,
-            previousFileNames: oldNames,
-            itemChanges: Array([added, removed].joined()))
-    }
-
-    private func apply(directoryChange: DirectoryChange) {
-        if !directoryChange.hasPreviousState {
-            outlineView.reloadItem(directoryChange.path, reloadChildren: true)
+    private func applyChangesToDirectory(atPath path: Path) {
+        if directoryContentsCache[path] == nil {
+            outlineView.reloadItem(path, reloadChildren: true)
             // outlineView.sizeToFit()
             return
         }
 
-        Swift.print("Applying dir change", directoryChange)
+        let nextFileNames = contentsOfDirectory(atPath: path)
+        let prevFileNames = directoryContentsCache[path] ?? []
 
         outlineView.beginUpdates()
 
-        directoryContentsCache[directoryChange.path] = directoryChange.nextFileNames
+        directoryContentsCache[path] = nextFileNames
 
-        directoryChange.itemChanges.forEach { change in
-            switch change.type {
-            case .added(let index):
-                outlineView.insertItems(
-                    at: IndexSet(integer: index),
-                    inParent: directoryChange.path,
-                    withAnimation: NSTableView.AnimationOptions.slideDown)
-            case .removed(let index):
+        let extendedDiff = prevFileNames.extendedDiff(nextFileNames)
+
+        // Process deletions first, since these will affect the indexes of insertions
+        extendedDiff.elements.forEach { element in
+            switch element {
+            case let .delete(at: index):
+                Swift.print("Remove", index, prevFileNames[index])
                 outlineView.removeItems(
                     at: IndexSet(integer: index),
-                    inParent: directoryChange.path,
+                    inParent: path,
                     withAnimation: NSTableView.AnimationOptions.slideUp)
-            case .moved(_, _):
+            default:
+                break
+            }
+        }
+
+        extendedDiff.elements.forEach { element in
+            switch element {
+            case let .insert(at: index):
+                Swift.print("Insert", index, nextFileNames[index])
+                outlineView.insertItems(
+                    at: IndexSet(integer: index),
+                    inParent: path,
+                    withAnimation: NSTableView.AnimationOptions.slideDown)
+            default:
+                break
+            }
+        }
+
+        extendedDiff.elements.forEach { element in
+            switch element {
+            case let .move(from, to):
+                // TODO: We're not actually getting moves during renames, since we first need to know
+                // if a rename occurred (to the diff algorithm, it looks like a different path).
+                Swift.print("Move", from, path, to, path)
+                outlineView.moveItem(
+                    at: from, inParent: path,
+                    to: to, inParent: path)
+            default:
                 break
             }
         }

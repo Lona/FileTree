@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		6B23DBDA212B1CAC00614C77 /* FileTree.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B23DBD7212B1C3C00614C77 /* FileTree.framework */; };
 		6B23DBDB212B1CAC00614C77 /* FileTree.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6B23DBD7212B1C3C00614C77 /* FileTree.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		6B746B672213AB7D00D3B805 /* Differ.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6B746B652213AB7500D3B805 /* Differ.framework */; };
+		6B746B682213AB7D00D3B805 /* Differ.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 6B746B652213AB7500D3B805 /* Differ.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		6BBE0F76212B50D500CEE8C1 /* Witness.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 6BBE0F75212B50D500CEE8C1 /* Witness.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		6BD3429921278D5800CB54A4 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BD3429821278D5800CB54A4 /* AppDelegate.swift */; };
 		6BD3429B21278D5900CB54A4 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6BD3429A21278D5900CB54A4 /* Assets.xcassets */; };
@@ -50,6 +52,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				6B746B682213AB7D00D3B805 /* Differ.framework in CopyFiles */,
 				6BBE0F76212B50D500CEE8C1 /* Witness.framework in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -58,6 +61,7 @@
 
 /* Begin PBXFileReference section */
 		6B23DBD2212B1C3C00614C77 /* FileTree.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = FileTree.xcodeproj; sourceTree = "<group>"; };
+		6B746B652213AB7500D3B805 /* Differ.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Differ.framework; path = Carthage/Build/Mac/Differ.framework; sourceTree = "<group>"; };
 		6BBE0F75212B50D500CEE8C1 /* Witness.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Witness.framework; path = Carthage/Build/Mac/Witness.framework; sourceTree = "<group>"; };
 		6BD3429521278D5800CB54A4 /* FileTreeExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FileTreeExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6BD3429821278D5800CB54A4 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
@@ -72,6 +76,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6B746B672213AB7D00D3B805 /* Differ.framework in Frameworks */,
 				6B23DBDA212B1CAC00614C77 /* FileTree.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -90,6 +95,7 @@
 		6BD3428C21278D5800CB54A4 = {
 			isa = PBXGroup;
 			children = (
+				6B746B652213AB7500D3B805 /* Differ.framework */,
 				6BBE0F75212B50D500CEE8C1 /* Witness.framework */,
 				6B23DBD2212B1C3C00614C77 /* FileTree.xcodeproj */,
 				6BD3429721278D5800CB54A4 /* FileTreeExample */,
@@ -354,6 +360,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = CV2RHZWPY9;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Carthage/Build/Mac",
+				);
 				INFOPLIST_FILE = FileTreeExample/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -375,6 +385,10 @@
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				DEVELOPMENT_TEAM = CV2RHZWPY9;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Carthage/Build/Mac",
+				);
 				INFOPLIST_FILE = FileTreeExample/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
