@@ -330,6 +330,8 @@ extension FileTree {
 
             var fsEvents: [FSEvent] = []
 
+            // When a file is renamed, we receive two consecutive events with .ItemRenamed set.
+            // We group these into a single event.
             var i = 0
             while i < events.count {
                 let event = events[i]
@@ -374,11 +376,13 @@ extension FileTree {
                 i += 1
             }
 
+//            Swift.print(fsEvents)
+
             DispatchQueue.main.async {
                 fsEvents.forEach { fsEvent in
                     switch fsEvent.eventType {
-                    case let .rename(from: _, to: _, inParent: parentURL):
-                        self.applyChangesToDirectory(atPath: parentURL.path)
+                    case let .rename(from: from, to: to, inParent: parentURL):
+                        self.applyChangesToDirectory(atPath: parentURL.path, pathMapping: [to: from])
                     case .directory(let url):
                         self.applyChangesToDirectory(atPath: url.path)
                     }
@@ -387,7 +391,7 @@ extension FileTree {
         }
     }
 
-    private func applyChangesToDirectory(atPath path: Path) {
+    private func applyChangesToDirectory(atPath path: Path, pathMapping: [String: String] = [:]) {
         if directoryContentsCache[path] == nil {
             outlineView.reloadItem(path, reloadChildren: true)
             outlineView.sizeToFit()
@@ -411,9 +415,6 @@ extension FileTree {
                     at: IndexSet(integer: index),
                     inParent: path,
                     withAnimation: NSTableView.AnimationOptions.slideUp)
-
-                let url = URL(fileURLWithPath: path).appendingPathComponent(prevFileNames[index])
-                self.onDeleteFile?(url.path)
             default:
                 break
             }
@@ -426,15 +427,44 @@ extension FileTree {
                     at: IndexSet(integer: index),
                     inParent: path,
                     withAnimation: NSTableView.AnimationOptions.slideDown)
-
-                let url = URL(fileURLWithPath: path).appendingPathComponent(nextFileNames[index])
-                self.onCreateFile?(url.path)
             default:
                 break
             }
         }
 
         outlineView.endUpdates()
+
+        // Filter out moves before firing created/deleted events
+        let extendedDiff = prevFileNames.extendedDiff(nextFileNames, isEqual: { prev, next in
+            if let found = pathMapping[next] {
+                if found == prev {
+                    return true
+                }
+            }
+
+            return prev == next
+        })
+
+        extendedDiff.forEach { element in
+            switch element {
+            case let .delete(at: index):
+                let url = URL(fileURLWithPath: path).appendingPathComponent(prevFileNames[index])
+                self.onDeleteFile?(url.path)
+            case let .insert(at: index):
+                let url = URL(fileURLWithPath: path).appendingPathComponent(nextFileNames[index])
+                self.onCreateFile?(url.path)
+            case .move:
+                // Renames don't necessarily cause the position to change. Handle renames afterwards
+                // since we know which files have been renamed from the filesystem events
+                break
+            }
+        }
+
+        pathMapping.forEach { key, value in
+            let prevURL = URL(fileURLWithPath: path).appendingPathComponent(value)
+            let nextURL = URL(fileURLWithPath: path).appendingPathComponent(key)
+            self.onRenameFile?(prevURL.path, nextURL.path)
+        }
     }
 }
 
@@ -697,8 +727,6 @@ extension FileTree {
                     } catch {
                         Swift.print("Failed to rename \(path) to \(newPath)")
                     }
-
-                    fileTree.onRenameFile?(path, newPath)
                 }
 
                 fileTree.endRenamingFile()
