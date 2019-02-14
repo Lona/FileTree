@@ -39,6 +39,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.leadingAnchor.constraint(equalTo: fileTree.leadingAnchor).isActive = true
         contentView.trailingAnchor.constraint(equalTo: fileTree.trailingAnchor).isActive = true
 
+        fileTree.showRootFile = false
+
         fileTree.onAction = { path in
             Swift.print("Click \(path)")
         }
@@ -139,11 +141,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         Swift.print("New file \(newFilePath)")
 
-//        fileTree.createFile(atPath: newFilePath, contents: Data())
-
         FileManager.default.createFile(atPath: newFilePath, contents: Data(), attributes: nil)
-//
-//        fileTree.reloadData()
     }
 
     @objc func handleNewDirectory(_ sender: AnyObject) {
@@ -162,8 +160,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 atPath: newFilePath,
                 withIntermediateDirectories: true,
                 attributes: nil)
-
-            fileTree.reloadData()
         } catch {
             Swift.print("Failed to create directory \(newFileName)")
         }

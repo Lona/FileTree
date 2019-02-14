@@ -170,6 +170,8 @@ public class FileTree: NSBox {
     }
 
     @discardableResult public func beginRenamingFile(atPath path: Path) -> NSView? {
+        if path == rootPath { return nil }
+
         renamingPath = path
 
         let index = outlineView.row(forItem: path)
@@ -264,14 +266,20 @@ public class FileTree: NSBox {
     public override func menu(for event: NSEvent) -> NSMenu? {
         let point = outlineView.convert(event.locationInWindow, from: nil)
         let row = outlineView.row(at: point)
-        guard let path = outlineView.item(atRow: row) as? Path else { return nil }
+
+        let path: Path
+        if row >= 0, let item = outlineView.item(atRow: row) as? Path {
+            path = item
+        } else {
+            path = rootPath
+        }
 
         if let menu = menuForFile?(path) {
             menu.delegate = self
 
             contextMenuForPath = path
 
-            if let rowView = outlineView.rowView(atRow: row, makeIfNecessary: false) as? FileTreeRowView {
+            if row >= 0, let rowView = outlineView.rowView(atRow: row, makeIfNecessary: false) as? FileTreeRowView {
                 rowView.drawsContextMenuOutline = true
             }
 
@@ -456,6 +464,8 @@ extension FileTree {
             })
 
             DispatchQueue.main.async {
+                self.outlineView.beginUpdates()
+
                 eventsForDirectory.forEach { directoryPath, fsEvents in
                     var nameMapping: [String: String] = [:]
                     var ownEventPaths: [Path] = []
@@ -475,6 +485,8 @@ extension FileTree {
                         nameMapping: nameMapping,
                         ownEventPaths: ownEventPaths)
                 }
+
+                self.outlineView.endUpdates()
             }
         }
     }
@@ -483,16 +495,19 @@ extension FileTree {
         atPath path: Path,
         nameMapping: [String: String] = [:],
         ownEventPaths: [Path] = []) {
+
+        // If we're not showing the rootPath, it won't exist as an item in the tree.
+        // Instead we use nil to specify the top-level container.
+        let parent = (!showRootFile && path == rootPath) ? nil : path
+
         if directoryContentsCache[path] == nil {
-            outlineView.reloadItem(path, reloadChildren: true)
+            outlineView.reloadItem(parent, reloadChildren: true)
             outlineView.sizeToFit()
             return
         }
 
         let nextFileNames = contentsOfDirectory(atPath: path)
         let prevFileNames = directoryContentsCache[path] ?? []
-
-        outlineView.beginUpdates()
 
         directoryContentsCache[path] = nextFileNames
 
@@ -504,7 +519,7 @@ extension FileTree {
             case let .delete(at: index):
                 outlineView.removeItems(
                     at: IndexSet(integer: index),
-                    inParent: path,
+                    inParent: parent,
                     withAnimation: NSTableView.AnimationOptions.slideUp)
             default:
                 break
@@ -516,14 +531,12 @@ extension FileTree {
             case let .insert(at: index):
                 outlineView.insertItems(
                     at: IndexSet(integer: index),
-                    inParent: path,
+                    inParent: parent,
                     withAnimation: NSTableView.AnimationOptions.slideDown)
             default:
                 break
             }
         }
-
-        outlineView.endUpdates()
 
         // Filter out moves before firing created/deleted events
         let extendedDiff = prevFileNames.extendedDiff(nextFileNames, isEqual: { prev, next in
@@ -653,10 +666,8 @@ extension FileTree: NSOutlineViewDataSource {
                 let proposedPath = URL(fileURLWithPath: rootPath).appendingPathComponent(sourceItemPath.lastPathComponent).path
 
                 if !showRootFile && validateProposedMoveInternal(oldPath: sourceItem, newPath: proposedPath) {
-                    return NSDragOperation()
+                    return NSDragOperation.move
                 }
-
-                return NSDragOperation.move
             default: break
             }
         }
@@ -811,7 +822,7 @@ extension FileTree: NSMenuDelegate {
 
             let row = outlineView.row(forItem: contextMenuForPath)
 
-            if let rowView = outlineView.rowView(atRow: row, makeIfNecessary: false) as? FileTreeRowView {
+            if row >= 0, let rowView = outlineView.rowView(atRow: row, makeIfNecessary: false) as? FileTreeRowView {
                 rowView.drawsContextMenuOutline = false
             }
         }
