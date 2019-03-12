@@ -26,6 +26,16 @@ public extension NSPasteboard.PasteboardType {
     static let fileTreeIndex = NSPasteboard.PasteboardType(rawValue: "filetree.index")
 }
 
+public extension NSPasteboard.PasteboardType {
+    public static let fileTreeURL: NSPasteboard.PasteboardType = {
+        if #available(OSX 10.13, *) {
+            return NSPasteboard.PasteboardType.fileURL
+        } else {
+            return NSPasteboard.PasteboardType(rawValue: "filetree.url")
+        }
+    }()
+}
+
 // MARK: - NSTableColumn
 
 private extension NSTableColumn {
@@ -638,6 +648,10 @@ extension FileTree: NSOutlineViewDataSource {
         let index = outlineView.row(forItem: item)
 
         pasteboardItem.setString(String(index), forType: .fileTreeIndex)
+
+        if let path = item as? String {
+            pasteboardItem.setString(URL(fileURLWithPath: path).absoluteString, forType: .fileTreeURL)
+        }
 
         return pasteboardItem
     }
