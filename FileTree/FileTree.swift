@@ -329,6 +329,7 @@ public class FileTree: NSBox {
         outlineView.reloadData()
 
         scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
         scrollView.drawsBackground = false
         scrollView.addSubview(outlineView)
         scrollView.documentView = outlineView
