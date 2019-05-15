@@ -27,7 +27,7 @@ public extension NSPasteboard.PasteboardType {
 }
 
 public extension NSPasteboard.PasteboardType {
-    public static let fileTreeURL: NSPasteboard.PasteboardType = {
+    static let fileTreeURL: NSPasteboard.PasteboardType = {
         if #available(OSX 10.13, *) {
             return NSPasteboard.PasteboardType.fileURL
         } else {
