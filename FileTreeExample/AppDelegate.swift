@@ -45,8 +45,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Swift.print("Click \(path)")
         }
 
-        fileTree.onSelect = { path in
+        fileTree.onSelect = { [unowned self] path in
             Swift.print("Selected \(path)")
+            self.fileTree.selectedPath = path
         }
 
         fileTree.onRenameFile = { oldPath, newPath, options in

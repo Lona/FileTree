@@ -214,7 +214,7 @@ public class FileTree: NSBox {
     private var directoryContentsCache: [String: [String]] = [:]
 
     private var initialized = false
-    private var outlineView = NSOutlineView(style: .singleColumn)
+    private var outlineView = ControlledOutlineView(style: .singleColumn)
     private var scrollView = NSScrollView(frame: .zero)
 
     private var autosaveName: NSTableView.AutosaveName {
@@ -262,15 +262,37 @@ public class FileTree: NSBox {
     }
 
     @objc func handleAction(_ sender: AnyObject?) {
-        let row = outlineView.selectedRow
-        guard let path = outlineView.item(atRow: row) as? Path else { return }
-        onAction?(path)
+        outlineView.delayedActionEvent = { [unowned self] in
+            if let selectedPath = self.selectedPath {
+                self.onAction?(selectedPath)
+            }
+        }
     }
 
-    public func outlineViewSelectionDidChange(_ notification: Notification) {
-        let row = outlineView.selectedRow
-        guard let path = outlineView.item(atRow: row) as? Path else { return }
-        onSelect?(path)
+    public var selectedPath: Path? {
+        didSet {
+            if let selectedPath = selectedPath {
+                let selectedIndex = outlineView.row(forItem: selectedPath)
+
+                outlineView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
+
+                // Check that the view is currently visible, otherwise it will scroll to the bottom
+                if visibleRect != .zero {
+                    outlineView.scrollRowToVisible(selectedIndex)
+                }
+
+                var reloadIndexSet = IndexSet(integer: selectedIndex)
+
+                if let oldValue = oldValue {
+                    let oldSelectedIndex = outlineView.row(forItem: oldValue)
+                    reloadIndexSet.insert(oldSelectedIndex)
+                }
+
+                outlineView.reloadData(forRowIndexes: reloadIndexSet, columnIndexes: IndexSet(integer: 0))
+            } else {
+                outlineView.selectRowIndexes(IndexSet(), byExtendingSelection: false)
+            }
+        }
     }
 
     public override func menu(for event: NSEvent) -> NSMenu? {
@@ -803,6 +825,16 @@ extension FileTree {
 
 extension FileTree: NSOutlineViewDelegate {
 
+    public func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        if let outlineView = outlineView as? ControlledOutlineView, let path = item as? Path {
+            outlineView.setDelayedEventIfNil { [unowned self] in
+                self.onSelect?(path)
+            }
+        }
+
+        return false
+    }
+
     public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         let rowView = FileTreeRowView()
 
@@ -956,5 +988,58 @@ extension FileTree {
         }
 
         return fileTree
+    }
+}
+
+/// In order to control the selection state outside of the NSOutlineView,
+/// we have to prevent the NSOutlineView from changing its own selection.
+/// We do this by returning `false` from the `shouldSelectItem` delegate
+/// method, and then calling `onSelect` after the `mouseDown` or `keyDown`
+/// method finishes the rest of its work. We keep track of the first row that gets
+/// selected during keyboard/mouse event handling, and call `onSelect` with it,
+/// ignoring the other rows that were selected.
+///
+/// We can't call `onSelect()` from `shouldSelectItem` directly, since
+/// `shouldSelectItem` will be called repeatedly when we return false,
+/// as the NSOutlineView tries to selected the subsequent row(s).
+///
+/// The `selectionIndexesForProposedSelection` delegate method has the
+/// same issue, where it may be called repeatedly.
+///
+/// The `selectionShouldChange` delegate method doesn't help us, since we
+/// don't know which row was selected (it may have been selected via
+/// keyboard, so we can't use `clickedRow`)
+///
+/// TODO: It could be simpler to handle click and keyboard events manually
+/// within `mouseDown` and `keyDown`. We'd have to make sure drag-and-drop still
+/// works as expected.
+class ControlledOutlineView: NSOutlineView {
+    var delayedSelectionEvent: (() -> Void)?
+
+    var delayedActionEvent: (() -> Void)?
+
+    func setDelayedEventIfNil(_ delayedEvent: @escaping () -> Void) {
+        if self.delayedSelectionEvent != nil { return }
+        self.delayedSelectionEvent = delayedEvent
+    }
+
+    func handleDelayedEvents() {
+        delayedSelectionEvent?()
+        delayedSelectionEvent = nil
+
+        delayedActionEvent?()
+        delayedActionEvent = nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+
+        handleDelayedEvents()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        super.keyDown(with: event)
+
+        handleDelayedEvents()
     }
 }
