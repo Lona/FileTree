@@ -119,7 +119,7 @@ public class FileTree: NSBox {
 
     public var onAction: ((Path) -> Void)?
 
-    public var onSelect: ((Path) -> Void)?
+    public var onSelect: ((Path?) -> Void)?
 
     public var onCreateFile: ((Path, FileEventOptions) -> Void)?
 
@@ -261,14 +261,6 @@ public class FileTree: NSBox {
         }
     }
 
-    @objc func handleAction(_ sender: AnyObject?) {
-        outlineView.delayedActionEvent = { [unowned self] in
-            if let selectedPath = self.selectedPath {
-                self.onAction?(selectedPath)
-            }
-        }
-    }
-
     public var selectedPath: Path? {
         didSet {
             setSelectedPath(selectedPath, oldPath: oldValue)
@@ -349,8 +341,6 @@ public class FileTree: NSBox {
         outlineView.dataSource = self
         outlineView.delegate = self
         outlineView.autosaveName = autosaveName
-        outlineView.target = self
-        outlineView.action = #selector(handleAction(_:))
 
         outlineView.reloadData()
 
@@ -364,6 +354,16 @@ public class FileTree: NSBox {
 
         addSubview(scrollView)
 
+        outlineView.onAction = { [unowned self] row in
+            if let path = self.outlineView.item(atRow: row) as? Path {
+                self.onAction?(path)
+            }
+        }
+
+        outlineView.onSelect = { [unowned self] row in
+            let path = self.outlineView.item(atRow: row) as? Path
+            self.onSelect?(path)
+        }
     }
 
     func setUpConstraints() {
@@ -832,12 +832,6 @@ extension FileTree {
 extension FileTree: NSOutlineViewDelegate {
 
     public func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        if let outlineView = outlineView as? ControlledOutlineView, let path = item as? Path {
-            outlineView.setDelayedEventIfNil { [unowned self] in
-                self.onSelect?(path)
-            }
-        }
-
         return false
     }
 
@@ -997,55 +991,82 @@ extension FileTree {
     }
 }
 
-/// In order to control the selection state outside of the NSOutlineView,
-/// we have to prevent the NSOutlineView from changing its own selection.
-/// We do this by returning `false` from the `shouldSelectItem` delegate
-/// method, and then calling `onSelect` after the `mouseDown` or `keyDown`
-/// method finishes the rest of its work. We keep track of the first row that gets
-/// selected during keyboard/mouse event handling, and call `onSelect` with it,
-/// ignoring the other rows that were selected.
-///
-/// We can't call `onSelect()` from `shouldSelectItem` directly, since
-/// `shouldSelectItem` will be called repeatedly when we return false,
-/// as the NSOutlineView tries to selected the subsequent row(s).
-///
-/// The `selectionIndexesForProposedSelection` delegate method has the
-/// same issue, where it may be called repeatedly.
-///
-/// The `selectionShouldChange` delegate method doesn't help us, since we
-/// don't know which row was selected (it may have been selected via
-/// keyboard, so we can't use `clickedRow`)
-///
-/// TODO: It could be simpler to handle click and keyboard events manually
-/// within `mouseDown` and `keyDown`. We'd have to make sure drag-and-drop still
-/// works as expected.
+// MARK: - ControlledOutlineView
+
 class ControlledOutlineView: NSOutlineView {
-    var delayedSelectionEvent: (() -> Void)?
 
-    var delayedActionEvent: (() -> Void)?
+    var onAction: ((Int) -> Void)?
 
-    func setDelayedEventIfNil(_ delayedEvent: @escaping () -> Void) {
-        if self.delayedSelectionEvent != nil { return }
-        self.delayedSelectionEvent = delayedEvent
-    }
-
-    func handleDelayedEvents() {
-        delayedSelectionEvent?()
-        delayedSelectionEvent = nil
-
-        delayedActionEvent?()
-        delayedActionEvent = nil
-    }
+    var onSelect: ((Int) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
-        super.mouseDown(with: event)
+        let point = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: point)
 
-        handleDelayedEvents()
+        onSelect?(row)
+
+        trackMouse(startingWith: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let row = self.row(at: point)
+
+        onAction?(row)
     }
 
     override func keyDown(with event: NSEvent) {
-        super.keyDown(with: event)
+        switch Int(event.keyCode) {
+        case 126: // Up
+            if numberOfRows == 0 {
+                onSelect?(-1)
+            } else {
+                let newRow = max(0, selectedRow - 1)
+                onSelect?(newRow)
+            }
+        case 125: // Down
+            if numberOfRows == 0 {
+                onSelect?(-1)
+            } else {
+                let newRow = min(selectedRow + 1, numberOfRows - 1)
+                onSelect?(newRow)
+            }
+        default:
+            super.keyDown(with: event)
+        }
+    }
 
-        handleDelayedEvents()
+    func trackMouse(startingWith initialEvent: NSEvent) {
+        guard let window = window else { return }
+
+        let initialPosition = convert(initialEvent.locationInWindow, from: nil)
+
+        trackingLoop: while true {
+            let event = window.nextEvent(matching: [.leftMouseUp, .leftMouseDragged])!
+            let position = convert(event.locationInWindow, from: nil)
+
+            switch event.type {
+            case .leftMouseDragged:
+                // After a certain distance, transfer control back to default drag code
+                if initialPosition.distance(to: position) > 5 {
+                    super.mouseDown(with: initialEvent)
+                    super.mouseMoved(with: event)
+                    break trackingLoop
+                }
+            case .leftMouseUp:
+                mouseUp(with: event)
+                break trackingLoop
+            default:
+                break
+            }
+        }
+    }
+}
+
+// MARK: - NSPoint
+
+private extension NSPoint {
+    func distance(to: NSPoint) -> CGFloat {
+        return sqrt((x - to.x) * (x - to.x) + (y - to.y) * (y - to.y))
     }
 }
