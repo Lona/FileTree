@@ -271,27 +271,31 @@ public class FileTree: NSBox {
 
     public var selectedPath: Path? {
         didSet {
-            if let selectedPath = selectedPath {
-                let selectedIndex = outlineView.row(forItem: selectedPath)
+            setSelectedPath(selectedPath, oldPath: oldValue)
+        }
+    }
 
-                outlineView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
+    public func setSelectedPath(_ selectedPath: Path?, oldPath oldValue: Path?) {
+        if let selectedPath = selectedPath {
+            let selectedIndex = outlineView.row(forItem: selectedPath)
 
-                // Check that the view is currently visible, otherwise it will scroll to the bottom
-                if visibleRect != .zero {
-                    outlineView.scrollRowToVisible(selectedIndex)
-                }
+            outlineView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
 
-                var reloadIndexSet = IndexSet(integer: selectedIndex)
-
-                if let oldValue = oldValue {
-                    let oldSelectedIndex = outlineView.row(forItem: oldValue)
-                    reloadIndexSet.insert(oldSelectedIndex)
-                }
-
-                outlineView.reloadData(forRowIndexes: reloadIndexSet, columnIndexes: IndexSet(integer: 0))
-            } else {
-                outlineView.selectRowIndexes(IndexSet(), byExtendingSelection: false)
+            // Check that the view is currently visible, otherwise it will scroll to the bottom
+            if visibleRect != .zero {
+                outlineView.scrollRowToVisible(selectedIndex)
             }
+
+            var reloadIndexSet = IndexSet(integer: selectedIndex)
+
+            if let oldValue = oldValue {
+                let oldSelectedIndex = outlineView.row(forItem: oldValue)
+                reloadIndexSet.insert(oldSelectedIndex)
+            }
+
+            outlineView.reloadData(forRowIndexes: reloadIndexSet, columnIndexes: IndexSet(integer: 0))
+        } else {
+            outlineView.selectRowIndexes(IndexSet(), byExtendingSelection: false)
         }
     }
 
@@ -518,6 +522,8 @@ extension FileTree {
                         nameMapping: nameMapping,
                         ownEventPaths: ownEventPaths)
                 }
+
+                self.setSelectedPath(self.selectedPath, oldPath: self.selectedPath)
 
                 self.outlineView.endUpdates()
             }
