@@ -261,13 +261,13 @@ public class FileTree: NSBox {
         }
     }
 
-    public var selectedPath: Path? {
+    public var selectedFile: Path? {
         didSet {
-            setSelectedPath(selectedPath, oldPath: oldValue)
+            setSelectedFile(selectedFile, oldPath: oldValue)
         }
     }
 
-    public func setSelectedPath(_ selectedPath: Path?, oldPath oldValue: Path?) {
+    public func setSelectedFile(_ selectedPath: Path?, oldPath oldValue: Path?) {
         if let selectedPath = selectedPath {
             let selectedIndex = outlineView.row(forItem: selectedPath)
 
@@ -523,7 +523,7 @@ extension FileTree {
                         ownEventPaths: ownEventPaths)
                 }
 
-                self.setSelectedPath(self.selectedPath, oldPath: self.selectedPath)
+                self.setSelectedFile(self.selectedFile, oldPath: self.selectedFile)
 
                 self.outlineView.endUpdates()
             }
