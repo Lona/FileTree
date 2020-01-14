@@ -269,7 +269,22 @@ public class FileTree: NSBox {
 
     public func setSelectedFile(_ selectedPath: Path?, oldPath oldValue: Path?) {
         if let selectedPath = selectedPath {
-            let selectedIndex = outlineView.row(forItem: selectedPath)
+            var selectedIndex = outlineView.row(forItem: selectedPath)
+
+            // File is either not in the tree or in a collapsed parent
+            if selectedIndex == -1 {
+                let ancestorPaths = URL(fileURLWithPath: selectedPath).ancestorPaths().reversed()
+
+                for path in ancestorPaths {
+                    let index = outlineView.row(forItem: path)
+
+                    if index != -1 {
+                        outlineView.expandItem(path)
+                    }
+                }
+
+                selectedIndex = outlineView.row(forItem: selectedPath)
+            }
 
             outlineView.selectRowIndexes(IndexSet(integer: selectedIndex), byExtendingSelection: false)
 
@@ -1068,5 +1083,25 @@ class ControlledOutlineView: NSOutlineView {
 private extension NSPoint {
     func distance(to: NSPoint) -> CGFloat {
         return sqrt((x - to.x) * (x - to.x) + (y - to.y) * (y - to.y))
+    }
+}
+
+// MARK: - URL
+
+private extension URL {
+    func ancestorPaths() -> [String] {
+        var ancestors: [String] = []
+        var parentURL = self
+        var currentURL = parentURL.deletingLastPathComponent()
+
+        // Fail when the path current path stops getting shorter, e.g. "/" is shorter than "/../",
+        // which is how `deletingLastPathComponent` behaves on the root path
+        while currentURL.path.count < parentURL.path.count {
+            ancestors.append(currentURL.path)
+            parentURL = currentURL
+            currentURL = currentURL.deletingLastPathComponent()
+        }
+
+        return ancestors
     }
 }
