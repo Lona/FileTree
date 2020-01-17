@@ -545,6 +545,8 @@ extension FileTree {
         }
     }
 
+    // First insert and then delete items for this path. We process insertions and deletions
+    // in batches to avoid leaving the outline view's indexes in an inconsistent state.
     private func applyChangesToDirectory(
         atPath path: Path,
         nameMapping: [String: String] = [:],
@@ -567,29 +569,37 @@ extension FileTree {
 
         let diff = prevFileNames.diff(nextFileNames)
 
-        // Process deletions first, since these will affect the indexes of insertions
-        diff.elements.forEach { element in
+        // Process deletions first, since these will affect the indexes of insertions.
+        let deleted = diff.elements.compactMap { element -> Optional<Int> in
             switch element {
             case let .delete(at: index):
-                outlineView.removeItems(
-                    at: IndexSet(integer: index),
-                    inParent: parent,
-                    withAnimation: NSTableView.AnimationOptions.slideUp)
+                return index
             default:
-                break
+                return nil
             }
         }
 
-        diff.elements.forEach { element in
+        if !deleted.isEmpty {
+            outlineView.removeItems(
+                at: IndexSet(deleted),
+                inParent: parent,
+                withAnimation: NSTableView.AnimationOptions.slideUp)
+        }
+
+        let inserted = diff.elements.compactMap { element -> Optional<Int> in
             switch element {
             case let .insert(at: index):
-                outlineView.insertItems(
-                    at: IndexSet(integer: index),
-                    inParent: parent,
-                    withAnimation: NSTableView.AnimationOptions.slideDown)
+                return index
             default:
-                break
+                return nil
             }
+        }
+
+        if !inserted.isEmpty {
+            outlineView.insertItems(
+                at: IndexSet(inserted),
+                inParent: parent,
+                withAnimation: NSTableView.AnimationOptions.slideDown)
         }
 
         // Filter out moves before firing created/deleted events
