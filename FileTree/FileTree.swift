@@ -1025,11 +1025,6 @@ class ControlledOutlineView: NSOutlineView {
     var onSelect: ((Int) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        let row = self.row(at: point)
-
-        onSelect?(row)
-
         trackMouse(startingWith: event)
     }
 
@@ -1037,6 +1032,7 @@ class ControlledOutlineView: NSOutlineView {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
 
+        onSelect?(row)
         onAction?(row)
     }
 
