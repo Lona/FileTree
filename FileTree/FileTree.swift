@@ -48,13 +48,13 @@ private extension NSTableColumn {
 
 // MARK: - NSOutlineView
 
-private extension NSOutlineView {
-    enum Style {
+extension NSOutlineView {
+    public enum Style {
         case standard
         case singleColumn
     }
 
-    convenience init(style: Style) {
+    public convenience init(style: Style) {
         self.init()
 
         switch style {
@@ -79,7 +79,7 @@ private extension NSOutlineView {
 
 // MARK: - FileTree
 
-public class FileTree: NSBox {
+open class FileTree: NSBox {
 
     public typealias Path = String
     public typealias Name = String
@@ -132,6 +132,8 @@ public class FileTree: NSBox {
     public var onPressEnter: ((Path) -> Void)?
 
     public var performMoveFile: ((Path, Path) -> Bool)?
+
+    public var rowStyle: FileTreeRowView.Style = .standard
 
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
@@ -777,8 +779,50 @@ extension FileTree: NSOutlineViewDataSource {
 
 // MARK: - FileTreeRowView
 
-private class FileTreeRowView: NSTableRowView {
-    public var drawsContextMenuOutline = false {
+open class FileTreeRowView: NSTableRowView {
+
+    public enum Style: Equatable {
+        case standard
+        case custom(CustomStyle)
+
+        public static var rounded: Style = .custom(.rounded)
+    }
+
+    public struct CustomStyle: Equatable {
+        public var inset: NSSize
+        public var radius: NSSize
+        public var ringInset: NSSize
+        public var ringRadius: NSSize
+
+        public static var rounded = CustomStyle(
+            inset: NSSize(width: 3, height: 1),
+            radius: NSSize(width: 5, height: 5),
+            ringInset: NSSize(width: 3, height: 1),
+            ringRadius: NSSize(width: 5, height: 5)
+        )
+    }
+
+    public init(style: Style = .standard) {
+        self.style = style
+
+        super.init(frame: .zero)
+    }
+
+    required public init?(coder: NSCoder) {
+        self.style = .standard
+
+        super.init(coder: coder)
+    }
+
+    open var style: Style {
+        didSet {
+            if style != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
+    open var drawsContextMenuOutline = false {
         didSet {
             if drawsContextMenuOutline != oldValue {
                 needsDisplay = true
@@ -786,18 +830,75 @@ private class FileTreeRowView: NSTableRowView {
         }
     }
 
-    override func draw(_ dirtyRect: NSRect) {
+    /**
+     Make sure we're not drawing a row bigger than the containing table view.
+
+     Sometimes when expanding a row, it will temporarily increase in width.
+     */
+    open var rowWidthForDrawing: CGFloat {
+        return min(superview?.superview?.bounds.width ?? CGFloat.greatestFiniteMagnitude, bounds.width)
+    }
+
+    /**
+     Get a rect suitable for drawing the row's background.
+     */
+    open var rectForDrawing: NSRect {
+        return NSRect(x: bounds.origin.y, y: bounds.origin.y, width: rowWidthForDrawing, height: bounds.height)
+    }
+
+    open override func drawSelection(in dirtyRect: NSRect) {
+        switch style {
+        case .standard:
+            super.drawSelection(in: dirtyRect)
+        case .custom(let style):
+            if #available(OSX 10.14, *) {
+                if isSelected {
+                    if window?.isMainWindow == false {
+                        NSColor.unemphasizedSelectedContentBackgroundColor.setFill()
+                    } else {
+                        NSColor.controlAccentColor.setFill()
+                    }
+                    NSBezierPath(
+                        roundedRect: rectForDrawing.insetBy(dx: style.inset.width, dy: style.inset.height),
+                        xRadius: style.radius.width,
+                        yRadius: style.radius.height
+                    ).fill()
+                }
+            } else {
+                super.drawSelection(in: dirtyRect)
+            }
+        }
+    }
+
+    open override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
         if drawsContextMenuOutline {
-            let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 3, yRadius: 3)
-            path.lineWidth = 2
             if #available(OSX 10.14, *) {
-                NSColor.controlAccentColor.set()
+                switch style {
+                case .standard:
+                    NSColor.controlAccentColor.setStroke()
+                case .custom:
+                    NSColor.controlAccentColor.blended(withFraction: 0.2, of: .white)?.setStroke()
+                }
             } else {
-                NSColor.selectedControlColor.set()
+                NSColor.selectedControlColor.setStroke()
             }
-            path.stroke()
+
+            switch style {
+            case .standard:
+                let path = NSBezierPath(roundedRect: rectForDrawing.insetBy(dx: 2, dy: 2), xRadius: 3, yRadius: 3)
+                path.lineWidth = 2
+                path.stroke()
+            case .custom(let style):
+                let path = NSBezierPath(
+                    roundedRect: bounds.insetBy(dx: style.ringInset.width, dy: style.ringInset.height),
+                    xRadius: style.ringRadius.width,
+                    yRadius: style.ringRadius.height
+                )
+                path.lineWidth = 2
+                path.stroke()
+            }
         }
     }
 }
@@ -861,7 +962,7 @@ extension FileTree: NSOutlineViewDelegate {
     }
 
     public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-        let rowView = FileTreeRowView()
+        let rowView = FileTreeRowView(style: rowStyle)
 
         guard let path = item as? String else { return rowView }
 
@@ -1018,17 +1119,19 @@ extension FileTree {
 
 // MARK: - ControlledOutlineView
 
-class ControlledOutlineView: NSOutlineView {
+open class ControlledOutlineView: NSOutlineView {
 
-    var onAction: ((Int) -> Void)?
+    open var onAction: ((Int) -> Void)?
 
-    var onSelect: ((Int) -> Void)?
+    open var onSelect: ((Int) -> Void)?
 
-    override func mouseDown(with event: NSEvent) {
+    open var dragThreshold: CGFloat = 5
+
+    open override func mouseDown(with event: NSEvent) {
         trackMouse(startingWith: event)
     }
 
-    override func mouseUp(with event: NSEvent) {
+    open override func mouseUp(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
 
@@ -1036,7 +1139,7 @@ class ControlledOutlineView: NSOutlineView {
         onAction?(row)
     }
 
-    override func keyDown(with event: NSEvent) {
+    open override func keyDown(with event: NSEvent) {
         switch Int(event.keyCode) {
         case 126: // Up
             if numberOfRows == 0 {
@@ -1057,7 +1160,7 @@ class ControlledOutlineView: NSOutlineView {
         }
     }
 
-    func trackMouse(startingWith initialEvent: NSEvent) {
+    open func trackMouse(startingWith initialEvent: NSEvent) {
         guard let window = window else { return }
 
         let initialPosition = convert(initialEvent.locationInWindow, from: nil)
@@ -1069,7 +1172,7 @@ class ControlledOutlineView: NSOutlineView {
             switch event.type {
             case .leftMouseDragged:
                 // After a certain distance, transfer control back to default drag code
-                if initialPosition.distance(to: position) > 5 {
+                if initialPosition.distance(to: position) > dragThreshold {
                     super.mouseDown(with: initialEvent)
                     super.mouseMoved(with: event)
                     break trackingLoop

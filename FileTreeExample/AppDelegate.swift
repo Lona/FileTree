@@ -39,6 +39,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.leadingAnchor.constraint(equalTo: fileTree.leadingAnchor).isActive = true
         contentView.trailingAnchor.constraint(equalTo: fileTree.trailingAnchor).isActive = true
 
+        fileTree.rowStyle = .rounded
+
         fileTree.showRootFile = false
 
         fileTree.onAction = { path in
@@ -46,7 +48,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         fileTree.onSelect = { [unowned self] path in
-            Swift.print("Selected \(path)")
+            Swift.print("Selected \(String(describing: path))")
             self.fileTree.selectedFile = path
         }
 
