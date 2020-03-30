@@ -856,7 +856,7 @@ open class FileTreeRowView: NSTableRowView {
                     if window?.isMainWindow == false {
                         NSColor.unemphasizedSelectedContentBackgroundColor.setFill()
                     } else {
-                        NSColor.controlAccentColor.setFill()
+                        NSColor.selectedContentBackgroundColor.setFill()
                     }
                     NSBezierPath(
                         roundedRect: rectForDrawing.insetBy(dx: style.inset.width, dy: style.inset.height),
@@ -875,12 +875,7 @@ open class FileTreeRowView: NSTableRowView {
 
         if drawsContextMenuOutline {
             if #available(OSX 10.14, *) {
-                switch style {
-                case .standard:
-                    NSColor.controlAccentColor.setStroke()
-                case .custom:
-                    NSColor.controlAccentColor.blended(withFraction: 0.2, of: .white)?.setStroke()
-                }
+                NSColor.controlAccentColor.setStroke()
             } else {
                 NSColor.selectedControlColor.setStroke()
             }
