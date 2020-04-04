@@ -853,10 +853,10 @@ open class FileTreeRowView: NSTableRowView {
         case .custom(let style):
             if #available(OSX 10.14, *) {
                 if isSelected {
-                    if window?.isMainWindow == false {
-                        NSColor.unemphasizedSelectedContentBackgroundColor.setFill()
-                    } else {
+                    if let window = window, window.isMainWindow && window.isKeyWindow {
                         NSColor.selectedContentBackgroundColor.setFill()
+                    } else {
+                        NSColor.unemphasizedSelectedContentBackgroundColor.setFill()
                     }
                     NSBezierPath(
                         roundedRect: rectForDrawing.insetBy(dx: style.inset.width, dy: style.inset.height),
