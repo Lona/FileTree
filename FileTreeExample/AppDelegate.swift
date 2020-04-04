@@ -39,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.leadingAnchor.constraint(equalTo: fileTree.leadingAnchor).isActive = true
         contentView.trailingAnchor.constraint(equalTo: fileTree.trailingAnchor).isActive = true
 
-        fileTree.rowStyle = .rounded
+        fileTree.defaultRowStyle = .rounded
 
         fileTree.showRootFile = false
 

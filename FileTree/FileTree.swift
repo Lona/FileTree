@@ -133,7 +133,7 @@ open class FileTree: NSBox {
 
     public var performMoveFile: ((Path, Path) -> Bool)?
 
-    public var rowStyle: FileTreeRowView.Style = .standard
+    public var defaultRowStyle: FileTreeRowView.Style = .standard
 
     public var defaultRowHeight: CGFloat = 28.0 { didSet { update() } }
 
@@ -150,6 +150,8 @@ open class FileTree: NSBox {
     public var rowHeightForFile: ((Path) -> CGFloat)? { didSet { update() } }
 
     public var rowViewForFile: ((Path, RowViewOptions) -> NSView)? { didSet { update() } }
+
+    public var rowStyleForFile: ((Path, RowViewOptions) -> FileTreeRowView.Style)? { didSet { update() } }
 
     public var imageForFile: ((Path, NSSize) -> NSImage)? { didSet { update() } }
 
@@ -853,7 +855,7 @@ open class FileTreeRowView: NSTableRowView {
         case .custom(let style):
             if #available(OSX 10.14, *) {
                 if isSelected {
-                    if let window = window, window.isMainWindow && window.isKeyWindow {
+                    if let window = window, window.isMainWindow && window.isKeyWindow && window.firstResponder == superview {
                         NSColor.selectedContentBackgroundColor.setFill()
                     } else {
                         NSColor.unemphasizedSelectedContentBackgroundColor.setFill()
@@ -957,9 +959,11 @@ extension FileTree: NSOutlineViewDelegate {
     }
 
     public func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-        let rowView = FileTreeRowView(style: rowStyle)
+        guard let path = item as? String else { return nil }
 
-        guard let path = item as? String else { return rowView }
+        let options = rowViewOptions(atPath: path)
+
+        let rowView = FileTreeRowView(style: rowStyleForFile?(path, options) ?? defaultRowStyle)
 
         rowView.drawsContextMenuOutline = contextMenuForPath == path
 
