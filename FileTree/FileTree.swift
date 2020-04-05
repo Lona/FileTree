@@ -900,8 +900,6 @@ open class FileTreeRowView: NSTableRowView {
     }
 
     open override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-
         switch style {
         case .standard:
             break
@@ -911,6 +909,8 @@ open class FileTreeRowView: NSTableRowView {
                 dirtyRect.fill()
             }
         }
+
+        super.draw(dirtyRect)
 
         if drawsContextMenuOutline {
             if #available(OSX 10.14, *) {
