@@ -400,6 +400,18 @@ open class FileTree: NSBox {
     }
 }
 
+// MARK: - Size
+
+extension FileTree {
+    open override var intrinsicContentSize: NSSize {
+        return outlineView.intrinsicContentSize
+    }
+
+    open override var fittingSize: NSSize {
+        return outlineView.fittingSize
+    }
+}
+
 // MARK: - File system events
 
 extension FileTree {
