@@ -167,6 +167,11 @@ open class FileTree: NSBox {
 
     public var showRootFile = true { didSet { update() } }
 
+    public var isAnimationEnabled: Bool {
+        get { outlineView.isAnimationEnabled }
+        set { outlineView.isAnimationEnabled = newValue }
+    }
+
     public var invalidatesIntrinsicContentSizeOnRowExpand: Bool = false {
         didSet {
             update()
@@ -1174,6 +1179,34 @@ extension FileTree {
 // MARK: - ControlledOutlineView
 
 open class ControlledOutlineView: NSOutlineView {
+
+    open override func expandItem(_ item: Any?, expandChildren: Bool) {
+        if isAnimationEnabled {
+            super.expandItem(item, expandChildren: expandChildren)
+        } else {
+            NSAnimationContext.beginGrouping()
+            NSAnimationContext.current.duration = 0
+
+            super.expandItem(item, expandChildren: expandChildren)
+
+            NSAnimationContext.endGrouping()
+        }
+    }
+
+    open override func collapseItem(_ item: Any?, collapseChildren: Bool) {
+        if isAnimationEnabled {
+            super.collapseItem(item, collapseChildren: collapseChildren)
+        } else {
+            NSAnimationContext.beginGrouping()
+            NSAnimationContext.current.duration = 0
+
+            super.collapseItem(item, collapseChildren: collapseChildren)
+
+            NSAnimationContext.endGrouping()
+        }
+    }
+
+    open var isAnimationEnabled: Bool = true
 
     open var onAction: ((Int) -> Void)?
 
