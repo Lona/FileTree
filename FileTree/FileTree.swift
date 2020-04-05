@@ -998,6 +998,8 @@ extension FileTree {
 
         public static let editable = RowViewOptions(rawValue: 1 << 0)
         public static let hasActiveContextMenu = RowViewOptions(rawValue: 1 << 1)
+        public static let isFirstRow = RowViewOptions(rawValue: 1 << 2)
+        public static let isLastRow = RowViewOptions(rawValue: 1 << 3)
 
         public static let none: RowViewOptions = []
     }
@@ -1011,6 +1013,14 @@ extension FileTree {
 
         if contextMenuForPath == path {
             options.insert(.hasActiveContextMenu)
+        }
+
+        if outlineView.row(forItem: path) == 0 {
+            options.insert(.isFirstRow)
+        }
+
+        if outlineView.row(forItem: path) == outlineView.numberOfRows - 1 {
+            options.insert(.isLastRow)
         }
 
         return options
