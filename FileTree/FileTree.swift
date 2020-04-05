@@ -167,6 +167,11 @@ open class FileTree: NSBox {
 
     public var showRootFile = true { didSet { update() } }
 
+    public var intercellSpacing: NSSize {
+        get { outlineView.intercellSpacing }
+        set { outlineView.intercellSpacing = newValue }
+    }
+
     public var isAnimationEnabled: Bool {
         get { outlineView.isAnimationEnabled }
         set { outlineView.isAnimationEnabled = newValue }
@@ -819,13 +824,15 @@ open class FileTreeRowView: NSTableRowView {
             radius: NSSize = .zero,
             ringInset: NSSize = .zero,
             ringRadius: NSSize = .zero,
-            backgroundColor: NSColor? = nil
+            backgroundColor: NSColor? = nil,
+            bottomBorderColor: NSColor? = nil
         ) {
             self.inset = inset
             self.radius = radius
             self.ringInset = ringInset
             self.ringRadius = ringRadius
             self.backgroundColor = backgroundColor
+            self.bottomBorderColor = bottomBorderColor
         }
 
         public var inset: NSSize
@@ -833,6 +840,7 @@ open class FileTreeRowView: NSTableRowView {
         public var ringInset: NSSize
         public var ringRadius: NSSize
         public var backgroundColor: NSColor?
+        public var bottomBorderColor: NSColor?
 
         public static var rounded = CustomStyle(
             inset: NSSize(width: 3, height: 1),
@@ -922,6 +930,17 @@ open class FileTreeRowView: NSTableRowView {
         }
 
         super.draw(dirtyRect)
+
+        switch style {
+        case .standard:
+            break
+        case .custom(let style):
+            if let bottomBorderColor = style.bottomBorderColor {
+                bottomBorderColor.setFill()
+                let rect = self.rectForDrawing
+                NSRect(x: rect.origin.x, y: rect.maxY - 1, width: rect.width, height: 1).fill()
+            }
+        }
 
         if drawsContextMenuOutline {
             if #available(OSX 10.14, *) {
