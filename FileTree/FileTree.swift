@@ -1072,6 +1072,22 @@ extension FileTree: NSOutlineViewDelegate {
             invalidateIntrinsicContentSize()
         }
     }
+
+    public func outlineView(_ outlineView: NSOutlineView, didAdd rowView: NSTableRowView, forRow row: Int) {
+        if row - 1 >= 0,
+            let previous = outlineView.rowView(atRow: row - 1, makeIfNecessary: false) as? FileTreeRowView,
+            let path = outlineView.item(atRow: row - 1) as? String {
+            previous.style = rowStyleForFile?(path, rowViewOptions(atPath: path)) ?? defaultRowStyle
+        }
+    }
+
+    public func outlineView(_ outlineView: NSOutlineView, didRemove rowView: NSTableRowView, forRow row: Int) {
+        if row + 1 < outlineView.numberOfRows,
+            let next = outlineView.rowView(atRow: row + 1, makeIfNecessary: false) as? FileTreeRowView,
+            let path = outlineView.item(atRow: row + 1) as? String {
+            next.style = rowStyleForFile?(path, rowViewOptions(atPath: path)) ?? defaultRowStyle
+        }
+    }
 }
 
 // MARK: - NSMenuDelegate
