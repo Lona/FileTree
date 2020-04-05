@@ -803,10 +803,25 @@ open class FileTreeRowView: NSTableRowView {
     }
 
     public struct CustomStyle: Equatable {
+        public init(
+            inset: NSSize = .zero,
+            radius: NSSize = .zero,
+            ringInset: NSSize = .zero,
+            ringRadius: NSSize = .zero,
+            backgroundColor: NSColor? = nil
+        ) {
+            self.inset = inset
+            self.radius = radius
+            self.ringInset = ringInset
+            self.ringRadius = ringRadius
+            self.backgroundColor = backgroundColor
+        }
+
         public var inset: NSSize
         public var radius: NSSize
         public var ringInset: NSSize
         public var ringRadius: NSSize
+        public var backgroundColor: NSColor?
 
         public static var rounded = CustomStyle(
             inset: NSSize(width: 3, height: 1),
@@ -886,6 +901,16 @@ open class FileTreeRowView: NSTableRowView {
 
     open override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+
+        switch style {
+        case .standard:
+            break
+        case .custom(let style):
+            if let backgroundColor = style.backgroundColor {
+                backgroundColor.setFill()
+                dirtyRect.fill()
+            }
+        }
 
         if drawsContextMenuOutline {
             if #available(OSX 10.14, *) {
