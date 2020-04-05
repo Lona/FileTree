@@ -167,6 +167,12 @@ open class FileTree: NSBox {
 
     public var showRootFile = true { didSet { update() } }
 
+    public var invalidatesIntrinsicContentSizeOnRowExpand: Bool = false {
+        didSet {
+            update()
+        }
+    }
+
     public var rootPath = "/" {
         didSet {
             if !initialized { return }
@@ -1019,6 +1025,18 @@ extension FileTree: NSOutlineViewDelegate {
         guard let path = item as? String else { return defaultRowHeight }
 
         return rowHeightForFile?(path) ?? defaultRowHeight
+    }
+
+    public func outlineViewItemDidExpand(_ notification: Notification) {
+        if invalidatesIntrinsicContentSizeOnRowExpand {
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    public func outlineViewItemDidCollapse(_ notification: Notification) {
+        if invalidatesIntrinsicContentSizeOnRowExpand {
+            invalidateIntrinsicContentSize()
+        }
     }
 }
 
