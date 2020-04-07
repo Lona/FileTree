@@ -703,14 +703,7 @@ extension FileTree: NSOutlineViewDataSource {
     }
 
     public func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
-        guard let path = item as? String else { return false }
-
-        var isDir: ObjCBool = false
-        if FileManager.default.fileExists(atPath: path, isDirectory: &isDir) {
-            return isDir.boolValue
-        } else {
-            return false
-        }
+        return outlineView.numberOfChildren(ofItem: item) > 0
     }
 
     public func outlineView(_ outlineView: NSOutlineView, persistentObjectForItem item: Any?) -> Any? {
