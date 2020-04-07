@@ -665,6 +665,8 @@ extension FileTree {
             let nextURL = URL(fileURLWithPath: path).appendingPathComponent(key)
             self.onRenameFile?(prevURL.path, nextURL.path, ownEventPaths.contains(nextURL.path) ? .ownEvent : .none)
         }
+
+        invalidateIntrinsicContentSize()
     }
 }
 
